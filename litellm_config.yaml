@@ -1,0 +1,38 @@
+# LiteLLM 設定檔（目前先全部走雲端，不接地端模型）
+#
+# 三個角色都是獨立的別名，路由後端只認名字，不需要知道背後實際是哪個供應商：
+#   judge-model  → 專門用來「判斷難度」
+#   cloud-small  → 難度低時，負責回答的雲端小模型
+#   cloud-large  → 難度高時，負責回答的雲端大模型
+#
+# 之後要把某個角色換成別的供應商（例如把 cloud-small 換成 OpenAI 的 GPT-4o-mini），
+# 只要改這裡的 litellm_params，router_backend/app.py 完全不用動。
+
+model_list:
+  - model_name: judge-model
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: cloud-small
+    litellm_params:
+      model: gemini/gemini-2.5-flash-8b
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: cloud-large
+    litellm_params:
+      model: gemini/gemini-2.5-pro
+      api_key: os.environ/GEMINI_API_KEY
+
+  # 範例：如果想讓 cloud-small 改用 OpenAI 而不是 Anthropic，把上面 cloud-small
+  # 的 litellm_params 換成下面這樣（同時要在環境變數設定 OPENAI_API_KEY）：
+  # - model_name: cloud-small
+  #   litellm_params:
+  #     model: gpt-4o-mini
+  #     api_key: os.environ/OPENAI_API_KEY
+
+general_settings:
+  master_key: sk-1234   # demo 用，正式環境請換成自己產生的金鑰，並用環境變數帶入、不要寫在檔案裡
+
+litellm_settings:
+  drop_params: true     # 不同供應商支援的參數不一樣，多餘的參數直接丟棄而不是報錯

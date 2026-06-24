@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+
+  router-backend:
+    build: ./router_backend
+    depends_on:
+      - litellm
+    ports:
+      - "8000:8000"
+    environment:
+      - LITELLM_BASE_URL=http://litellm:4000
+      - LITELLM_MASTER_KEY=sk-1234
+      - JUDGE_MODEL_ALIAS=judge-model
+      - SMALL_MODEL_ALIAS=cloud-small
+      - LARGE_MODEL_ALIAS=cloud-large
