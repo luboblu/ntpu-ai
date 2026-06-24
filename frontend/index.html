@@ -158,7 +158,7 @@
 
 <div class="input-area">
   <div class="input-wrap">
-    <textarea id="input" placeholder="輸入訊息… (Enter 送出，Shift+Enter 換行)" rows="1"></textarea>
+    <textarea id="input" placeholder="輸入訊息… (Enter 送出，Shift+Enter 換行)" rows="1" autocomplete="off"></textarea>
     <button class="send-btn" id="sendBtn">↑</button>
   </div>
   <div class="hint">AI 可能出錯，重要內容請自行驗證</div>
@@ -243,7 +243,9 @@
     const text = ta.value.trim();
     if (!text) return;
     btn.disabled = true;
-    ta.value = ""; ta.style.height = "auto";
+    const clearInput = () => { ta.value = ""; ta.style.height = "auto"; };
+    clearInput();
+    setTimeout(clearInput, 0);
     appendMsg("user", text);
     showTyping();
     try {
@@ -265,6 +267,9 @@
       ta.focus();
     }
   }
+
+  // 頁面從 bfcache 恢復時清空輸入框
+  window.addEventListener("pageshow", () => { ta.value = ""; ta.style.height = "auto"; });
 
   document.getElementById("sendBtn").onclick = send;
   ta.addEventListener("keydown", e => {
