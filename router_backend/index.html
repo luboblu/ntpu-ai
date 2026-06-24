@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>AI 路由系統</title>
+<style>
+  :root {
+    --teal: #0f6e56; --teal-bg: #e1f5ee;
+    --coral: #993c1d; --coral-bg: #faece7;
+    --purple: #534ab7; --purple-bg: #eeedfe;
+    --gray: #5f5e5a; --gray-bg: #f1efe8;
+    --text: #2c2c2a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Noto Sans TC", "PingFang TC", sans-serif;
+    background: #fafaf8; color: var(--text);
+    max-width: 720px; margin: 0 auto; padding: 24px 20px 60px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--gray); font-size: 13px; margin: 0 0 18px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .toggle { display: inline-flex; background: #f1efe8; border-radius: 8px; padding: 3px; }
+  .toggle button {
+    border: none; background: transparent; padding: 7px 14px; font-size: 13px;
+    border-radius: 6px; cursor: pointer; color: var(--gray); font-weight: 500;
+  }
+  .toggle button.active { background: white; color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .meter { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--gray); }
+  .meter-bar { width: 100px; height: 6px; border-radius: 3px; background: #ddd; overflow: hidden; }
+  .meter-fill { height: 100%; background: var(--teal); transition: width .3s; }
+  .meter-fill.large { background: var(--coral); }
+  .info {
+    font-size: 12px; color: var(--gray); background: #eef4fb; border: 1px solid #dbe7f5;
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; line-height: 1.6;
+  }
+  textarea {
+    width: 100%; height: 100px; border: 1px solid #d8d6cd; border-radius: 8px;
+    padding: 10px 12px; font-size: 14px; resize: none; font-family: inherit;
+  }
+  textarea:focus { outline: none; border-color: var(--purple); }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+  button.primary {
+    background: var(--purple); color: white; border: none; border-radius: 8px;
+    padding: 9px 18px; font-size: 14px; cursor: pointer; font-weight: 500;
+  }
+  button.primary:disabled { opacity: .4; cursor: default; }
+  button.ghost {
+    background: transparent; border: 1px solid #d8d6cd; border-radius: 8px;
+    padding: 9px 14px; font-size: 13px; cursor: pointer; color: var(--gray);
+  }
+  .card { border: 1px solid #e3e1d8; border-radius: 12px; padding: 18px; margin-top: 18px; background: white; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; border-radius: 999px;
+    padding: 4px 12px; font-size: 13px; font-weight: 500; border: 1px solid;
+  }
+  .badge.small { background: var(--teal-bg); color: var(--teal); border-color: var(--teal); }
+  .badge.large { background: var(--coral-bg); color: var(--coral); border-color: var(--coral); }
+  .card-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .timing { font-size: 12px; color: var(--gray); }
+  .judge-box { background: var(--purple-bg); border: 1px solid #ddd9f7; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+  .judge-title { font-size: 12px; font-weight: 600; color: var(--purple); margin-bottom: 6px; }
+  .reason-chip {
+    display: inline-block; font-size: 11px; background: white; border: 1px solid #ddd9f7;
+    border-radius: 6px; padding: 3px 8px; margin: 2px 4px 0 0; color: var(--text);
+  }
+  .session-line { border-top: 1px solid #ddd9f7; margin-top: 10px; padding-top: 8px; font-size: 12px; color: var(--gray); }
+  .answer-label { font-size: 12px; color: var(--gray); margin-bottom: 6px; }
+  .answer-box {
+    background: var(--gray-bg); border: 1px solid #e3e1d8; border-radius: 8px;
+    padding: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap;
+  }
+  table { width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #eee; }
+  th { color: var(--gray); font-weight: 500; background: #fafafa; }
+  .log-title { font-size: 12px; color: var(--gray); margin-top: 20px; margin-bottom: 4px; }
+  .error { color: var(--coral); font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+  <div class="row" style="justify-content: space-between;">
+    <div>
+      <h1>AI 路由系統</h1>
+      <p class="sub">輸入問題後依任務難度路由到地端小模型或商用大模型</p>
+    </div>
+    <button class="ghost" id="resetBtn">↺ 開新任務</button>
+  </div>
+
+  <div class="row">
+    <div class="meter">
+      任務累積難度
+      <div class="meter-bar"><div class="meter-fill" id="meterFill" style="width:0%"></div></div>
+      <span id="meterValue">0.00</span>
+    </div>
+  </div>
+
+  <div class="info">每次送出都會先打一次小模型評估難度（含上一輪對話脈絡），再依評分路由到地端小模型或商用大模型。判斷會考慮任務累積難度，不會因為單句簡單訊息就立刻降級。</div>
+
+  <textarea id="input" placeholder="輸入你的問題，例如：「幫我寫一個 quicksort 的 Python 實作」..."></textarea>
+  <div class="actions">
+    <button class="primary" id="sendBtn">送出並路由</button>
+  </div>
+
+  <div id="errorBox"></div>
+  <div id="resultArea"></div>
+
+  <div id="logArea"></div>
+
+<script>
+  // ---- 設定 ----
+  const BASE_URL = "https://ntpu-router-158606109353.asia-east1.run.app";
+  const sessionId = (() => {
+    let id = localStorage.getItem("ai_router_session_id");
+    if (!id) {
+      id = "sess-" + Math.random().toString(36).slice(2);
+      localStorage.setItem("ai_router_session_id", id);
+    }
+    return id;
+  })();
+
+  let history = [];
+
+  function updateMeter(value) {
+    const pct = Math.max(0, Math.min(1, value / 1.6)) * 100;
+    const fill = document.getElementById("meterFill");
+    fill.style.width = pct + "%";
+    fill.className = "meter-fill" + (value >= 1 ? " large" : "");
+    document.getElementById("meterValue").textContent = value.toFixed(2);
+  }
+
+  document.getElementById("resetBtn").onclick = async () => {
+    await fetch(`${BASE_URL}/reset?session_id=${encodeURIComponent(sessionId)}`, { method: "POST" });
+    updateMeter(0);
+    document.getElementById("resultArea").innerHTML = "";
+    document.getElementById("errorBox").innerHTML = "";
+  };
+
+  function badgeHtml(route) {
+    return route === "large"
+      ? `<span class="badge large">☁ 商用大模型</span>`
+      : `<span class="badge small">🖥 地端小模型</span>`;
+  }
+
+  function renderResult(query, data) {
+    const judgeHtml = `<div>本次訊息評分：<b>${data.judge.score.toFixed(1)} / 10</b></div>
+         <div style="font-size:12px;color:var(--gray);margin-top:4px;">${data.judge.reason || ""}</div>`;
+
+    document.getElementById("resultArea").innerHTML = `
+      <div class="card">
+        <div class="card-top">
+          ${badgeHtml(data.route)}
+          <span class="timing">判斷 ${data.judge_elapsed_ms}ms ＋ 回答 ${data.answer_elapsed_ms}ms</span>
+        </div>
+        <div class="judge-box">
+          <div class="judge-title">難度判斷階段（AI 判斷式，含對話脈絡）</div>
+          ${judgeHtml}
+          <div class="session-line">任務累積難度：<b>${data.session_score.toFixed(2)}</b>（門檻 1.00 以上 → 大模型；決定路由的是這個累積值，不是單看本次評分）</div>
+        </div>
+        <div class="answer-label">回答階段（模型：<code>${data.model}</code>）</div>
+        <div class="answer-box">${data.answer.replace(/</g, "&lt;")}</div>
+      </div>
+    `;
+  }
+
+  function renderLog() {
+    if (history.length < 2) { document.getElementById("logArea").innerHTML = ""; return; }
+    const rows = history.slice(0, 8).map(h => `
+      <tr>
+        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h.query}</td>
+        <td>${h.session_score.toFixed(2)}</td>
+        <td>${badgeHtml(h.route)}</td>
+      </tr>
+    `).join("");
+    document.getElementById("logArea").innerHTML = `
+      <div class="log-title">路由紀錄</div>
+      <table>
+        <thead><tr><th>問題</th><th>任務累積</th><th>路由</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  async function send() {
+    const input = document.getElementById("input");
+    const text = input.value.trim();
+    if (!text) return;
+
+    const sendBtn = document.getElementById("sendBtn");
+    sendBtn.disabled = true;
+    sendBtn.textContent = "處理中...";
+    document.getElementById("errorBox").innerHTML = "";
+
+    try {
+      const res = await fetch(`${BASE_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, message: text }),
+      });
+      if (!res.ok) throw new Error("後端回應錯誤：" + res.status);
+      const data = await res.json();
+
+      updateMeter(data.session_score);
+      renderResult(text, data);
+      history.unshift({ query: text, session_score: data.session_score, route: data.route });
+      renderLog();
+      input.value = "";
+    } catch (e) {
+      document.getElementById("errorBox").innerHTML =
+        `<div class="error">呼叫失敗：${e.message}（請確認 router-backend 與 LiteLLM 是否已啟動）</div>`;
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = "送出並路由";
+    }
+  }
+
+  document.getElementById("sendBtn").onclick = send;
+  document.getElementById("input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
+  });
+</script>
+</body>
+</html>

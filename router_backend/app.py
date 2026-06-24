@@ -18,6 +18,7 @@ from typing import Optional, Dict
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # ------------------------------------------------------------------
@@ -101,6 +102,11 @@ async def model_classify(client: httpx.AsyncClient, text: str, context_summary: 
 # ------------------------------------------------------------------
 # API
 # ------------------------------------------------------------------
+@app.get("/")
+async def index():
+    return FileResponse("index.html")
+
+
 @app.post("/chat")
 async def chat(req: ChatRequest):
     async with httpx.AsyncClient() as client:
