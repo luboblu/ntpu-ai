@@ -56,16 +56,19 @@ class ChatRequest(BaseModel):
 # ------------------------------------------------------------------
 # 呼叫 LiteLLM（OpenAI 相容的 /v1/chat/completions）
 # ------------------------------------------------------------------
-async def call_litellm(client: httpx.AsyncClient, model_alias: str, messages: list, max_tokens: int = 1000) -> str:
+async def call_litellm(client: httpx.AsyncClient, model_alias: str, messages: list, max_tokens: int = 4096) -> str:
     resp = await client.post(
         f"{LITELLM_BASE_URL}/v1/chat/completions",
         headers={"Authorization": f"Bearer {LITELLM_API_KEY}"},
         json={"model": model_alias, "messages": messages, "max_tokens": max_tokens},
-        timeout=60,
+        timeout=120,
     )
     resp.raise_for_status()
     data = resp.json()
-    return data["choices"][0]["message"]["content"]
+    content = data["choices"][0]["message"]["content"]
+    if content is None:
+        content = data["choices"][0]["message"].get("reasoning_content") or ""
+    return content
 
 
 # ------------------------------------------------------------------
