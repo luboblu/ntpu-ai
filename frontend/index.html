@@ -238,9 +238,10 @@
   });
 
   async function send() {
+    const btn = document.getElementById("sendBtn");
+    if (btn.disabled) return;
     const text = ta.value.trim();
     if (!text) return;
-    const btn = document.getElementById("sendBtn");
     btn.disabled = true;
     ta.value = ""; ta.style.height = "auto";
     appendMsg("user", text);

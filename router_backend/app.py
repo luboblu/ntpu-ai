@@ -74,20 +74,34 @@ async def call_litellm(client: httpx.AsyncClient, model_alias: str, messages: li
 # ------------------------------------------------------------------
 # AI 判斷式：額外打一次模型評估難度，並把上一輪對話脈絡也帶進去
 # ------------------------------------------------------------------
+JUDGE_SYSTEM_PROMPT = """你是一個路由決策模型，專門負責評估使用者訊息的任務難度，決定要交給輕量模型（Flash）還是強力模型（Pro）處理。
+
+你的唯一工作是輸出難度分數，不要回答使用者的問題。
+
+評分標準（0–10）：
+- 0–3：閒聊、問候、簡單查詢、是非題、單一事實查詢
+- 4–6：需要解釋概念、簡單摘要、基本程式碼片段、一般性建議
+- 7–10：多步驟推理、複雜程式實作、數學證明、需要深度分析或跨領域整合的任務
+
+注意事項：
+- 若訊息本身簡短，但對話脈絡顯示是複雜任務的延伸（如「幫我改一下」接在程式碼討論後），請評估整個任務的難度
+- 評分要保守：寧可低估讓 Flash 先試，也不要動輒給高分浪費 Pro
+
+輸出格式（嚴格遵守，不得有多餘文字）：
+{"score": 數字, "reason": "一句話說明"}"""
+
+
 async def model_classify(client: httpx.AsyncClient, text: str, context_summary: Optional[str]) -> dict:
     context_block = (
-        f'這是最近的對話脈絡（供參考，幫助你判斷新訊息是否仍屬於同一個任務的延伸）：\n"""\n{context_summary}\n"""\n\n'
+        f'對話脈絡：\n"""\n{context_summary}\n"""\n\n'
         if context_summary else ""
     )
-    prompt = (
-        "你是任務難度評估器。請評估「最新訊息」的難度，用 0 到 10 分表示"
-        "（0 分＝非常簡單；10 分＝非常困難，例如程式、數學證明、多步驟推理）。"
-        "如果這句話本身很簡短，但從對話脈絡看得出它是某個複雜任務的延伸（例如追問細節、要求修改前面的程式碼），"
-        "請評估「整個任務」的難度，不要只看這一句話的表面難度。"
-        '只能輸出 JSON：{"score": 數字, "reason": "一句話說明理由"}，不要輸出其他文字或標記。\n\n'
-        f"{context_block}最新訊息：\n```\n{text}\n```"
-    )
-    raw = await call_litellm(client, JUDGE_MODEL_ALIAS, [{"role": "user", "content": prompt}])
+    user_message = f"{context_block}請評估以下訊息的難度：\n```\n{text}\n```"
+    messages = [
+        {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+        {"role": "user",   "content": user_message},
+    ]
+    raw = await call_litellm(client, JUDGE_MODEL_ALIAS, messages)
     cleaned = raw.replace("```json", "").replace("```", "").strip()
     try:
         parsed = json.loads(cleaned)
