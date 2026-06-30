@@ -307,6 +307,39 @@
     padding: 1px 6px; display: inline-block;
   }
 
+  /* ── File Preview Panel ── */
+  #preview-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 120;
+    width: 480px; max-width: 90vw;
+    background: white; border-left: 1px solid #e5e5e5;
+    box-shadow: -4px 0 24px rgba(0,0,0,.1);
+    display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .25s ease;
+  }
+  #preview-panel.open { transform: translateX(0); }
+  .preview-header {
+    padding: 14px 16px; border-bottom: 1px solid #eee;
+    display: flex; align-items: flex-start; gap: 10px; flex-shrink: 0;
+  }
+  .preview-header-icon { font-size: 22px; flex-shrink: 0; }
+  .preview-header-info { flex: 1; min-width: 0; }
+  .preview-filename { font-size: 14px; font-weight: 600; color: #111; word-break: break-all; }
+  .preview-filemeta { font-size: 12px; color: #aaa; margin-top: 2px; }
+  .preview-close {
+    background: #f0f0f0; border: none; border-radius: 6px;
+    width: 28px; height: 28px; cursor: pointer; font-size: 16px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .preview-close:hover { background: #e0e0e0; }
+  .preview-body {
+    flex: 1; overflow: auto; padding: 16px;
+    font-size: 13px; line-height: 1.7; color: #333;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .preview-body img { max-width: 100%; border-radius: 8px; }
+  .preview-body iframe { width: 100%; height: 100%; border: none; }
+  .preview-loading { text-align: center; color: #aaa; padding: 48px; }
+
   /* ── Admin Panel ── */
   #admin-overlay {
     position: fixed; inset: 0; z-index: 150;
@@ -544,6 +577,21 @@
   </div>
 </div>
 
+<!-- File Preview Panel -->
+<div id="preview-panel">
+  <div class="preview-header">
+    <div class="preview-header-icon" id="preview-icon">📎</div>
+    <div class="preview-header-info">
+      <div class="preview-filename" id="preview-filename"></div>
+      <div class="preview-filemeta" id="preview-filemeta"></div>
+    </div>
+    <button class="preview-close" onclick="closePreview()">✕</button>
+  </div>
+  <div class="preview-body" id="preview-body">
+    <div class="preview-loading">載入中…</div>
+  </div>
+</div>
+
 <!-- Markdown -->
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 
@@ -741,7 +789,7 @@
     }
     for (const m of history) {
       if (m.role === "user") {
-        appendMsg("user", m.content, null, m._file_name ? { name: m._file_name, mime: m._file_mime_type } : null);
+        appendMsg("user", m.content, null, m._file_name ? { name: m._file_name, mime: m._file_mime_type, gcsPath: m._file_gcs_path || "" } : null);
       } else if (m.role === "assistant") {
         const data = m._route ? {
           route: m._route,
@@ -763,6 +811,48 @@
     backdrop.classList.remove("show");
     document.querySelectorAll(".conv-item").forEach(el => el.classList.remove("active"));
   };
+
+  // ── File Preview Panel ──
+  function closePreview() {
+    document.getElementById("preview-panel").classList.remove("open");
+  }
+
+  async function openFilePreview(gcsPath, filename, mime) {
+    if (!gcsPath || !currentUser) return;
+    const panel = document.getElementById("preview-panel");
+    document.getElementById("preview-icon").textContent   = _fileIcon(mime);
+    document.getElementById("preview-filename").textContent = filename;
+    document.getElementById("preview-filemeta").textContent = _fileExt(filename) + " 檔案";
+    document.getElementById("preview-body").innerHTML = `<div class="preview-loading">載入中…</div>`;
+    panel.classList.add("open");
+
+    try {
+      const token = await currentUser.getIdToken();
+      const res   = await fetch(`${BASE_URL}/file-preview?path=${encodeURIComponent(gcsPath)}`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("載入失敗 " + res.status);
+      const ct = res.headers.get("content-type") || "";
+      const body = document.getElementById("preview-body");
+
+      if (ct.startsWith("image/")) {
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        body.innerHTML = `<img src="${url}" alt="${filename}" />`;
+      } else if (ct === "application/pdf") {
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        body.style.padding = "0";
+        body.innerHTML = `<iframe src="${url}" style="width:100%;height:100%;border:none"></iframe>`;
+      } else {
+        const text = await res.text();
+        body.textContent = text;
+      }
+    } catch (e) {
+      document.getElementById("preview-body").innerHTML =
+        `<div class="preview-loading" style="color:#dc2626">${e.message}</div>`;
+    }
+  }
 
   // ── File upload ──
   let pendingFile = null; // { gcs_path, mime_type, filename }
@@ -852,10 +942,12 @@
   // ── Chat UI helpers ──
   function _buildFileCard(fileInfo) {
     if (!fileInfo || !fileInfo.name) return "";
-    const icon = _fileIcon(fileInfo.mime || "");
-    const ext  = _fileExt(fileInfo.name);
-    const meta = fileInfo.size ? _fmtSize(fileInfo.size) : "";
-    return `<div class="file-card">
+    const icon      = _fileIcon(fileInfo.mime || "");
+    const ext       = _fileExt(fileInfo.name);
+    const meta      = fileInfo.size ? _fmtSize(fileInfo.size) : "";
+    const gcsPath   = fileInfo.gcsPath || "";
+    const clickable = gcsPath ? `style="cursor:pointer" onclick="openFilePreview('${gcsPath.replace(/'/g,"\\'")}','${fileInfo.name.replace(/'/g,"\\'")}','${(fileInfo.mime||"").replace(/'/g,"\\'")}')"`  : "";
+    return `<div class="file-card" ${clickable}>
       <div class="file-card-icon">${icon}</div>
       <div class="file-card-info">
         <div class="file-card-name" title="${fileInfo.name}">${fileInfo.name.replace(/</g,"&lt;")}</div>
@@ -1007,7 +1099,7 @@
     clearInput(); setTimeout(clearInput, 0);
     const attachedFile = pendingFile;
     clearAttachPreview();
-    const fileInfo = attachedFile ? { name: attachedFile.filename, mime: attachedFile.mime_type, size: attachedFile.size } : null;
+    const fileInfo = attachedFile ? { name: attachedFile.filename, mime: attachedFile.mime_type, size: attachedFile.size, gcsPath: attachedFile.gcs_path } : null;
     appendMsg("user", text || "(檔案)", null, fileInfo);
     showTyping();
     _abortCtrl = new AbortController();

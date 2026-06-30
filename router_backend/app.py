@@ -490,6 +490,7 @@ async def chat(req: ChatRequest, authorization: Optional[str] = Header(None)):
     if req.file_name:
         user_entry["_file_name"]      = req.file_name
         user_entry["_file_mime_type"] = req.file_mime_type or ""
+        user_entry["_file_gcs_path"]  = req.file_gcs_path or ""
     new_history = history + [
         user_entry,
         {"role": "assistant", "content": answer,
@@ -605,6 +606,7 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
                 if req.file_name:
                     user_entry["_file_name"]      = req.file_name
                     user_entry["_file_mime_type"] = req.file_mime_type or ""
+                    user_entry["_file_gcs_path"]  = req.file_gcs_path or ""
                 new_history = history + [
                     user_entry,
                     {"role": "assistant", "content": full_content,
@@ -725,6 +727,30 @@ async def admin_toggle_admin(uid: str, is_admin: bool = True, authorization: Opt
     claims = {"admin": True} if is_admin else {}
     await asyncio.to_thread(fb_auth.set_custom_user_claims, uid, claims)
     return {"ok": True}
+
+
+@app.get("/file-preview")
+async def file_preview(path: str, authorization: Optional[str] = Header(None)):
+    from fastapi.responses import Response
+    decoded = await decode_token(authorization)
+    uid = decoded.get("uid", "anonymous")
+    if not _gcs_ready:
+        raise HTTPException(status_code=503)
+    if not path.startswith(f"uploads/{uid}/"):
+        raise HTTPException(status_code=403)
+    try:
+        blob = _gcs_client.bucket(GCS_BUCKET).blob(path)
+        file_bytes = await asyncio.to_thread(blob.download_as_bytes)
+        mime = (blob.content_type or "application/octet-stream").lower()
+        if mime in OFFICE_MIMES:
+            text = await asyncio.to_thread(_extract_office_text, file_bytes, mime)
+            return Response(content=text or "（無法取出文字內容）", media_type="text/plain; charset=utf-8")
+        is_text = any(mime.startswith(t) if t.endswith("/") else mime == t for t in TEXT_MIMES)
+        if is_text:
+            return Response(content=file_bytes, media_type=mime)
+        return Response(content=file_bytes, media_type=mime)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/upload")
