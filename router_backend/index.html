@@ -230,21 +230,35 @@
     box-shadow: 0 2px 8px rgba(0,0,0,.06);
   }
   .attach-preview {
-    display: none; align-items: center; gap: 8px;
-    padding: 8px 12px 0; flex-wrap: wrap;
+    display: none; align-items: flex-start; gap: 8px;
+    padding: 10px 12px 0; flex-wrap: wrap;
   }
   .attach-preview.show { display: flex; }
   .attach-chip {
-    display: flex; align-items: center; gap: 6px;
-    background: #f0eeff; border: 1px solid #c4b5fd; border-radius: 20px;
-    padding: 4px 10px; font-size: 12px; color: #5b21b6; max-width: 200px;
+    display: flex; align-items: flex-start; gap: 10px;
+    background: #f9f7ff; border: 1px solid #ddd5ff;
+    border-radius: 10px; padding: 10px 12px;
+    max-width: 280px; position: relative;
   }
-  .attach-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attach-chip-icon { font-size: 22px; flex-shrink: 0; line-height: 1; }
+  .attach-chip-info { flex: 1; min-width: 0; }
+  .attach-chip-name {
+    font-size: 13px; font-weight: 600; color: #3b1fa8;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 180px;
+  }
+  .attach-chip-meta { font-size: 11px; color: #888; margin-top: 2px; }
+  .attach-chip-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: .5px;
+    background: #ede9fe; color: #6d28d9; border-radius: 4px;
+    padding: 1px 6px; margin-top: 4px; display: inline-block;
+  }
   .attach-remove {
-    cursor: pointer; color: #9c6fe4; font-size: 14px; line-height: 1;
-    flex-shrink: 0; background: none; border: none; padding: 0;
+    position: absolute; top: 6px; right: 6px;
+    cursor: pointer; color: #bbb; font-size: 13px; line-height: 1;
+    background: none; border: none; padding: 0;
   }
-  .attach-remove:hover { color: #5b21b6; }
+  .attach-remove:hover { color: #555; }
   .input-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
   .attach-btn {
     width: 32px; height: 32px; border-radius: 8px; border: 1px solid #ddd;
@@ -270,16 +284,27 @@
   .send-btn:disabled { background: #ccc; cursor: default; }
   .hint { font-size: 11px; color: #ccc; text-align: center; margin-top: 6px; }
 
-  /* ── File chip in chat bubble ── */
-  .file-chip {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: #f0eeff; border: 1px solid #c4b5fd;
-    border-radius: 8px; padding: 4px 10px;
-    font-size: 12px; color: #5b21b6; margin-bottom: 6px;
+  /* ── File card in chat bubble ── */
+  .file-card {
+    display: flex; align-items: flex-start; gap: 10px;
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 8px;
+    max-width: 260px; min-width: 180px;
+    background: rgba(0,0,0,.15); border: 1px solid rgba(255,255,255,.15);
   }
-  .msg.user .file-chip {
-    background: rgba(0,0,0,.18); border-color: rgba(255,255,255,.15); color: rgba(255,255,255,.75);
-    font-size: 11px;
+  .file-card-icon { font-size: 24px; flex-shrink: 0; line-height: 1; }
+  .file-card-info { flex: 1; min-width: 0; }
+  .file-card-name {
+    font-size: 13px; font-weight: 600; color: white;
+    overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    word-break: break-all; margin-bottom: 3px;
+  }
+  .file-card-meta { font-size: 11px; color: rgba(255,255,255,.6); margin-bottom: 5px; }
+  .file-card-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: .5px;
+    background: rgba(255,255,255,.15); color: rgba(255,255,255,.8);
+    border: 1px solid rgba(255,255,255,.2); border-radius: 4px;
+    padding: 1px 6px; display: inline-block;
   }
 
   /* ── Admin Panel ── */
@@ -716,7 +741,7 @@
     }
     for (const m of history) {
       if (m.role === "user") {
-        appendMsg("user", m.content, null, m._file_name || null);
+        appendMsg("user", m.content, null, m._file_name ? { name: m._file_name, mime: m._file_mime_type } : null);
       } else if (m.role === "assistant") {
         const data = m._route ? {
           route: m._route,
@@ -755,7 +780,7 @@
       alert("檔案不能超過 20MB");
       return;
     }
-    showAttachPreview(file.name, true);
+    showAttachPreview(file.name, file.type, file.size, true);
     try {
       const token = await currentUser.getIdToken();
       const fd = new FormData();
@@ -767,8 +792,8 @@
       });
       if (!res.ok) throw new Error("上傳失敗 " + res.status);
       const data = await res.json();
-      pendingFile = { gcs_path: data.gcs_path, mime_type: data.mime_type, filename: data.filename };
-      showAttachPreview(data.filename, false);
+      pendingFile = { gcs_path: data.gcs_path, mime_type: data.mime_type, filename: data.filename, size: data.size };
+      showAttachPreview(data.filename, data.mime_type, data.size, false);
     } catch (err) {
       pendingFile = null;
       clearAttachPreview();
@@ -776,14 +801,42 @@
     }
   });
 
-  function showAttachPreview(filename, uploading) {
+  function _fileIcon(mime) {
+    if (!mime) return "📎";
+    if (mime.startsWith("image/")) return "🖼️";
+    if (mime === "application/pdf") return "📄";
+    if (mime.includes("word") || mime.includes("docx")) return "📝";
+    if (mime.includes("presentation") || mime.includes("pptx")) return "📊";
+    if (mime.includes("spreadsheet") || mime.includes("xlsx") || mime.includes("excel")) return "📈";
+    if (mime.startsWith("audio/")) return "🎵";
+    if (mime.startsWith("video/")) return "🎬";
+    if (mime.startsWith("text/")) return "📃";
+    return "📎";
+  }
+  function _fileExt(filename) {
+    const m = (filename || "").match(/\.([^.]+)$/);
+    return m ? m[1].toUpperCase() : "FILE";
+  }
+  function _fmtSize(bytes) {
+    if (!bytes) return "";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + " KB";
+    return (bytes/1024/1024).toFixed(1) + " MB";
+  }
+
+  function showAttachPreview(filename, mime, size, uploading) {
     const preview = document.getElementById("attachPreview");
-    const icon    = uploading ? "⏳" : "📎";
-    const label   = uploading ? `上傳中… ${filename}` : filename;
+    const icon    = uploading ? "⏳" : _fileIcon(mime);
+    const ext     = _fileExt(filename);
+    const meta    = uploading ? "上傳中…" : _fmtSize(size);
     preview.innerHTML = `
       <div class="attach-chip">
-        <span>${icon}</span>
-        <span title="${filename}">${label}</span>
+        <div class="attach-chip-icon">${icon}</div>
+        <div class="attach-chip-info">
+          <div class="attach-chip-name" title="${filename}">${filename}</div>
+          <div class="attach-chip-meta">${meta}</div>
+          ${uploading ? "" : `<span class="attach-chip-badge">${ext}</span>`}
+        </div>
         ${uploading ? "" : `<button class="attach-remove" onclick="clearAttachPreview()">✕</button>`}
       </div>`;
     preview.classList.add("show");
@@ -797,7 +850,22 @@
   }
 
   // ── Chat UI helpers ──
-  function appendMsg(role, text, data, fileName) {
+  function _buildFileCard(fileInfo) {
+    if (!fileInfo || !fileInfo.name) return "";
+    const icon = _fileIcon(fileInfo.mime || "");
+    const ext  = _fileExt(fileInfo.name);
+    const meta = fileInfo.size ? _fmtSize(fileInfo.size) : "";
+    return `<div class="file-card">
+      <div class="file-card-icon">${icon}</div>
+      <div class="file-card-info">
+        <div class="file-card-name" title="${fileInfo.name}">${fileInfo.name.replace(/</g,"&lt;")}</div>
+        ${meta ? `<div class="file-card-meta">${meta}</div>` : ""}
+        <span class="file-card-badge">${ext}</span>
+      </div>
+    </div>`;
+  }
+
+  function appendMsg(role, text, data, fileInfo) {
     document.getElementById("welcome")?.remove();
     const inner = document.querySelector("#messages .inner");
     const row = document.createElement("div");
@@ -827,12 +895,11 @@
     }
 
     const isAI = role === "ai";
-    const fileChip = fileName
-      ? `<div class="file-chip"><span>📎</span><span>${fileName.replace(/</g,"&lt;")}</span></div>` : "";
+    const fileCardHtml = !isAI ? _buildFileCard(fileInfo) : "";
     row.innerHTML = `
       <div class="avatar ${role}">${role === "user" ? "你" : "AI"}</div>
       <div class="msg-body">
-        ${fileChip}
+        ${fileCardHtml}
         <div class="bubble${isAI ? " md" : ""}">${isAI ? marked.parse(text) : text.replace(/</g, "&lt;")}</div>
         ${metaHtml}
       </div>`;
@@ -940,7 +1007,8 @@
     clearInput(); setTimeout(clearInput, 0);
     const attachedFile = pendingFile;
     clearAttachPreview();
-    appendMsg("user", text || "(檔案)", null, attachedFile?.filename || null);
+    const fileInfo = attachedFile ? { name: attachedFile.filename, mime: attachedFile.mime_type, size: attachedFile.size } : null;
+    appendMsg("user", text || "(檔案)", null, fileInfo);
     showTyping();
     _abortCtrl = new AbortController();
 
