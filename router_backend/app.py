@@ -408,7 +408,7 @@ async def model_classify(client: httpx.AsyncClient, text: str, history: list) ->
         {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
         {"role": "user", "content": f"{context_block}請評估以下最新訊息的難度：\n```\n{text}\n```"},
     ]
-    raw, judge_usage = await call_litellm(client, JUDGE_MODEL_ALIAS, messages, max_tokens=256)
+    raw, judge_usage = await call_litellm(client, JUDGE_MODEL_ALIAS, messages, max_tokens=1024)
     # 先嘗試直接解析，再用 regex 從回應中抓出 {...}
     parsed = None
     for candidate in [raw, re.sub(r"```(?:json)?|```", "", raw).strip()]:
@@ -427,6 +427,9 @@ async def model_classify(client: httpx.AsyncClient, text: str, history: list) ->
     if parsed:
         score = max(0.0, min(10.0, float(parsed.get("score", 5))))
         return {"score": score, "reason": parsed.get("reason", ""), "normalized": score / 10.0, "_usage": judge_usage}
+    # 解析失敗：記錄 raw 幫助偵錯
+    import logging
+    logging.warning(f"[judge] parse failed, raw={raw[:300]!r}")
     return {"score": 5.0, "reason": "", "normalized": 0.5, "_usage": judge_usage}
 
 

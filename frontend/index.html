@@ -821,7 +821,7 @@
         </div>
         <div class="judge-panel" id="${id}">
           本次評分 <b>${data.judge.score.toFixed(1)}</b> / 10<br>
-          ${data.judge.reason || ""}
+          ${data.judge.reason || "（無說明）"}
         </div>`;
     }
 
@@ -867,7 +867,7 @@
       <button class="judge-toggle" onclick="document.getElementById('${id}').classList.toggle('open')">難度分析 ▾</button>
     </div>
     <div class="judge-panel" id="${id}">
-      本次評分 <b>${judgeEvt.judge.score.toFixed(1)}</b> / 10<br>${judgeEvt.judge.reason || ""}
+      本次評分 <b>${judgeEvt.judge.score.toFixed(1)}</b> / 10<br>${judgeEvt.judge.reason || "（無說明）"}
     </div>`;
   }
 
