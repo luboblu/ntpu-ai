@@ -435,7 +435,14 @@ async def web_search(query: str, count: int = 5):
                 timeout=10,
             )
             if resp.status_code in (403, 429):
-                return None  # quota exceeded
+                try:
+                    body = resp.json()
+                    msg = str(body).lower()
+                    if "quota" in msg or "limit" in msg or "exceeded" in msg:
+                        return None  # 真正的額度用完
+                except Exception:
+                    pass
+                return ""  # key 無效或其他 4xx，不鎖死
             resp.raise_for_status()
             results = resp.json().get("organic", [])
             lines = [
