@@ -27,7 +27,7 @@ TINY_MODEL_ALIAS  = os.environ.get("TINY_MODEL_ALIAS", "")  # 開源小模型，
 HISTORY_LIMIT     = 10
 GCS_BUCKET        = os.environ.get("GCS_BUCKET", "ntpu-ai-uploads")
 UPLOAD_MAX_BYTES  = 20 * 1024 * 1024  # 20 MB
-SERPER_KEY        = os.environ.get("SERPER_API_KEY", "")
+TAVILY_KEY        = os.environ.get("TAVILY_API_KEY", "")
 
 
 # ------------------------------------------------------------------
@@ -424,31 +424,41 @@ async def build_user_content(message: str, file_gcs_path: Optional[str],
 # ------------------------------------------------------------------
 async def web_search(query: str, count: int = 5):
     """Returns search results str, "" on generic error, None on quota exceeded."""
-    if not SERPER_KEY:
+    if not TAVILY_KEY:
         return ""
     try:
         async with httpx.AsyncClient() as c:
             resp = await c.post(
-                "https://google.serper.dev/search",
-                headers={"X-API-KEY": SERPER_KEY, "Content-Type": "application/json"},
-                json={"q": query, "num": count, "gl": "tw", "hl": "zh-tw"},
-                timeout=10,
+                "https://api.tavily.com/search",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "api_key": TAVILY_KEY,
+                    "query": query,
+                    "max_results": count,
+                    "include_answer": True,
+                    "search_depth": "basic",
+                },
+                timeout=15,
             )
-            if resp.status_code in (403, 429):
+            if resp.status_code in (401, 403, 429):
                 try:
-                    body = resp.json()
-                    msg = str(body).lower()
-                    if "quota" in msg or "limit" in msg or "exceeded" in msg:
-                        return None  # 真正的額度用完
+                    msg = str(resp.json()).lower()
+                    if any(k in msg for k in ("quota", "limit", "exceeded", "plan")):
+                        return None  # 額度用完
                 except Exception:
                     pass
-                return ""  # key 無效或其他 4xx，不鎖死
+                return ""  # key 無效或其他錯誤，不鎖死按鈕
             resp.raise_for_status()
-            results = resp.json().get("organic", [])
-            lines = [
-                f"• {r.get('title','')}\n  {r.get('snippet','')}\n  {r.get('link','')}"
-                for r in results[:count] if r.get("title")
-            ]
+            data = resp.json()
+            lines = []
+            if data.get("answer"):
+                lines.append(f"摘要：{data['answer']}")
+            for r in data.get("results", [])[:count]:
+                title   = r.get("title", "")
+                content = r.get("content", "")[:200]
+                url     = r.get("url", "")
+                if title:
+                    lines.append(f"• {title}\n  {content}\n  {url}")
             return "\n\n".join(lines)
     except Exception:
         return ""
@@ -564,7 +574,7 @@ async def chat(req: ChatRequest, authorization: Optional[str] = Header(None)):
         judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})
         sys_prompt = await get_user_system_prompt(uid)
         search_ctx = ""
-        if req.search_enabled and SERPER_KEY:
+        if req.search_enabled and TAVILY_KEY:
             result = await web_search(req.message)
             search_ctx = result or ""  # None (quota) treated as empty
         user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
@@ -653,7 +663,7 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
                 # 4. 準備訊息（含系統提示 + 網路搜尋）
                 sys_prompt = await get_user_system_prompt(uid)
                 search_ctx = ""
-                if req.search_enabled and SERPER_KEY:
+                if req.search_enabled and TAVILY_KEY:
                     yield f"data: {json.dumps({'type':'search'})}\n\n"
                     result = await web_search(req.message)
                     if result is None:
