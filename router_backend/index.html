@@ -104,12 +104,6 @@
     font-size: 11px; color: var(--text5); font-weight: 600;
     padding: 8px 6px 4px; letter-spacing: .4px;
   }
-  .conv-item {
-    padding: 7px 10px; border-radius: 7px;
-    cursor: pointer; font-size: 13px; color: var(--text2);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    margin-bottom: 1px; transition: background .1s;
-  }
   .conv-item:hover { background: var(--sidebar-hover); }
   .conv-item.active { background: var(--sidebar-active); font-weight: 500; }
   .conv-empty { font-size: 13px; color: var(--text5); text-align: center; padding: 24px 12px; }
@@ -472,6 +466,117 @@
   .action-btn.demote { background: var(--bg2); color: var(--text4); border-color: var(--border3); }
   .action-btn.demote:hover { background: var(--sidebar-hover); }
 
+  /* ── Settings modal ── */
+  #settings-overlay {
+    position: fixed; inset: 0; z-index: 160;
+    background: rgba(0,0,0,.5);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #settings-overlay.hidden { display: none; }
+  .settings-modal {
+    background: var(--auth-bg); border-radius: 16px;
+    padding: 0; width: 480px; max-width: 94vw;
+    box-shadow: 0 8px 40px rgba(0,0,0,.3); overflow: hidden;
+  }
+  .settings-header {
+    background: #7c3aed; color: white;
+    padding: 14px 20px; display: flex; align-items: center; gap: 12px;
+  }
+  .settings-header h3 { font-size: 15px; font-weight: 700; flex: 1; }
+  .settings-close {
+    background: rgba(255,255,255,.15); border: none; color: white;
+    width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+    font-size: 16px; display: flex; align-items: center; justify-content: center;
+  }
+  .settings-close:hover { background: rgba(255,255,255,.25); }
+  .settings-body { padding: 20px; }
+  .settings-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; display: block; }
+  .settings-desc { font-size: 12px; color: var(--text4); margin-bottom: 8px; }
+  .settings-textarea {
+    width: 100%; padding: 10px 12px;
+    border: 1px solid var(--border3); border-radius: 8px;
+    font-size: 13px; font-family: inherit; color: var(--text);
+    background: var(--bg); resize: vertical; outline: none;
+    min-height: 100px; line-height: 1.6; transition: border-color .15s;
+  }
+  .settings-textarea:focus { border-color: #7c3aed; }
+  .settings-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .settings-save-btn {
+    padding: 9px 24px; background: #7c3aed; color: white;
+    border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background .15s;
+  }
+  .settings-save-btn:hover { background: #6d2fd4; }
+  .settings-export-btn {
+    padding: 9px 24px; background: var(--bg3); color: var(--text3);
+    border: 1px solid var(--border3); border-radius: 8px; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: background .15s;
+  }
+  .settings-export-btn:hover { filter: brightness(0.95); }
+  .settings-msg { font-size: 12px; color: #0f6e56; margin-top: 10px; min-height: 18px; }
+  .settings-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  /* ── Search button ── */
+  .search-btn {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border3);
+    background: var(--bg2); color: var(--text4); cursor: pointer;
+    font-size: 15px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all .15s;
+  }
+  .search-btn:hover { background: var(--sidebar-hover); color: var(--text2); }
+  .search-btn.active { background: #7c3aed; color: white; border-color: #7c3aed; }
+
+  /* ── Conv item with share ── */
+  .conv-item {
+    display: flex; align-items: center;
+    padding: 7px 10px; border-radius: 7px;
+    cursor: pointer; font-size: 13px; color: var(--text2);
+    margin-bottom: 1px; transition: background .1s; gap: 4px;
+  }
+  .conv-item-title {
+    flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .conv-share-btn {
+    display: none; background: none; border: none;
+    color: var(--text5); font-size: 13px; cursor: pointer;
+    padding: 2px 4px; border-radius: 4px; flex-shrink: 0; line-height: 1;
+  }
+  .conv-item:hover .conv-share-btn { display: flex; align-items: center; }
+  .conv-share-btn:hover { color: var(--text2); background: rgba(0,0,0,.08); }
+
+  /* ── Share toast ── */
+  #share-toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: var(--bg2); border: 1px solid var(--border3); border-radius: 12px;
+    padding: 14px 18px; box-shadow: 0 4px 24px rgba(0,0,0,.2);
+    z-index: 300; min-width: 320px; max-width: 90vw;
+    display: none;
+  }
+  #share-toast.show { display: block; }
+  .share-toast-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .share-toast-row { display: flex; gap: 8px; }
+  .share-toast-input {
+    flex: 1; padding: 7px 10px; border: 1px solid var(--border3); border-radius: 7px;
+    font-size: 12px; color: var(--text3); background: var(--bg); outline: none; font-family: monospace;
+  }
+  .share-copy-btn {
+    padding: 7px 14px; background: #7c3aed; color: white;
+    border: none; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .share-copy-btn:hover { background: #6d2fd4; }
+
+  /* ── Shared view (read-only, no auth) ── */
+  .share-header {
+    background: var(--bg2); border-bottom: 1px solid var(--border2);
+    padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  }
+  .share-header h2 { font-size: 14px; font-weight: 600; color: var(--text); flex: 1; }
+  .share-back-btn {
+    padding: 6px 14px; background: #7c3aed; color: white;
+    border: none; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .share-back-btn:hover { background: #6d2fd4; }
+
   /* Admin: no-admin prompt */
   .no-admin-box {
     text-align: center; padding: 48px 24px;
@@ -591,6 +696,7 @@
     <div class="header-right">
       <span class="user-email" id="user-email"></span>
       <button class="admin-btn" id="adminBtn" onclick="openAdmin()">&#x1F6E1;&#xFE0F; 管理員</button>
+      <button class="dark-toggle" id="settingsBtn" onclick="openSettings()" title="設定">⚙️</button>
       <button class="dark-toggle" id="langToggle" title="Switch language">中</button>
       <button class="dark-toggle" id="darkToggle" title="切換夜色模式">🌙</button>
       <button class="logout-btn" id="logoutBtn">登出</button>
@@ -613,10 +719,40 @@
         <button class="attach-btn" id="attachBtn" title="上傳檔案">&#x2B;</button>
         <input type="file" id="fileInput" style="display:none" />
         <textarea id="input" placeholder="輸入訊息… (Enter 送出，Shift+Enter 換行)" rows="1" autocomplete="off"></textarea>
+        <button class="search-btn" id="searchBtn" title="網路搜尋">🔍</button>
         <button class="send-btn" id="sendBtn">&#x2191;</button>
       </div>
     </div>
     <div class="hint">AI 可能出錯，重要內容請自行驗證</div>
+  </div>
+</div>
+
+<!-- ── Settings modal ── -->
+<div id="settings-overlay" class="hidden">
+  <div class="settings-modal">
+    <div class="settings-header">
+      <h3 id="settings-title">⚙️ 設定</h3>
+      <button class="settings-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="settings-body">
+      <label class="settings-label" id="settings-sys-label">系統提示詞</label>
+      <div class="settings-desc" id="settings-sys-desc">自訂 AI 的角色與行為，每次對話都會套用（空白 = 預設）</div>
+      <textarea class="settings-textarea" id="sys-prompt-input" rows="5" placeholder="例如：你是一位大學的 IT 助理，請用繁體中文回答，語氣要親切。"></textarea>
+      <div class="settings-actions">
+        <button class="settings-save-btn" onclick="saveSettings()" id="settings-save-btn">儲存</button>
+        <button class="settings-export-btn" onclick="exportConversation()" id="settings-export-btn">匯出對話</button>
+      </div>
+      <div class="settings-msg" id="settings-msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Share toast ── -->
+<div id="share-toast">
+  <div class="share-toast-title" id="share-toast-title">分享此對話</div>
+  <div class="share-toast-row">
+    <input class="share-toast-input" id="share-link-input" type="text" readonly />
+    <button class="share-copy-btn" id="share-copy-btn" onclick="copyShareLink()">複製</button>
   </div>
 </div>
 
@@ -787,12 +923,22 @@
       for (const conv of convs) {
         const active = conv.session_id === sessionId ? " active" : "";
         const title  = (conv.title || "對話").replace(/</g, "&lt;");
-        html += `<div class="conv-item${active}" data-sid="${conv.session_id}" title="${title}">${title}</div>`;
+        const sid    = conv.session_id.replace(/'/g, "\\'");
+        html += `<div class="conv-item${active}" data-sid="${conv.session_id}">
+          <span class="conv-item-title" title="${title}">${title}</span>
+          <button class="conv-share-btn" data-share-sid="${sid}" title="分享">🔗</button>
+        </div>`;
       }
     }
     el.innerHTML = html;
     el.querySelectorAll(".conv-item").forEach(item => {
-      item.onclick = () => openConversation(item.dataset.sid);
+      item.onclick = (e) => {
+        if (e.target.classList.contains("conv-share-btn")) return;
+        openConversation(item.dataset.sid);
+      };
+    });
+    el.querySelectorAll(".conv-share-btn").forEach(btn => {
+      btn.onclick = (e) => { e.stopPropagation(); shareConversation(btn.dataset.shareSid); };
     });
   }
 
@@ -1111,9 +1257,16 @@
     ta.style.height = Math.min(ta.scrollHeight, 160) + "px";
   });
 
-  let _abortCtrl = null;
-  let _sending   = false;
-  const sendBtn  = document.getElementById("sendBtn");
+  let _abortCtrl    = null;
+  let _sending      = false;
+  let _searchEnabled = false;
+  const sendBtn     = document.getElementById("sendBtn");
+  const searchBtn   = document.getElementById("searchBtn");
+
+  searchBtn.onclick = () => {
+    _searchEnabled = !_searchEnabled;
+    searchBtn.classList.toggle("active", _searchEnabled);
+  };
 
   function _setSend() {
     _sending = false; _abortCtrl = null;
@@ -1155,6 +1308,7 @@
           file_gcs_path:  attachedFile?.gcs_path  || null,
           file_mime_type: attachedFile?.mime_type  || null,
           file_name:      attachedFile?.filename   || null,
+          search_enabled: _searchEnabled,
         }),
         signal: _abortCtrl.signal,
       });
@@ -1180,6 +1334,9 @@
               document.getElementById("typing")?.remove();
               judgeEvt  = evt;
               streamRow = _createStreamRow(evt);
+            } else if (evt.type === "search" && streamRow) {
+              const b = streamRow.querySelector("#stream-bubble");
+              if (b) b.innerHTML = `<span style="color:var(--text5);font-size:13px">🔍 ${t("searchingWeb")}…</span>`;
             } else if (evt.type === "token" && streamRow) {
               fullText += evt.content;
               _updateStream(streamRow, fullText);
@@ -1294,6 +1451,21 @@
       loadingFail:      "載入失敗：",
       saveFail:         "儲存失敗：",
       deleteFail:       "刪除失敗：",
+      settingsTitle:    "⚙️ 設定",
+      settingsSysLabel: "系統提示詞",
+      settingsSysDesc:  "自訂 AI 的角色與行為，每次對話都會套用（空白 = 預設）",
+      settingsSave:     "儲存",
+      settingsExport:   "匯出對話",
+      settingsSaved:    "✓ 已儲存",
+      exportEmpty:      "目前沒有對話可以匯出",
+      searchToggleTitle:"網路搜尋",
+      searchingWeb:     "搜尋中",
+      shareTitle:       "分享此對話",
+      shareCopy:        "複製連結",
+      shareCopied:      "已複製！",
+      shareFail:        "分享失敗：",
+      shareViewTitle:   "分享的對話",
+      shareViewBack:    "回到 Aqulia",
     },
     en: {
       title:            "Aqulia Project",
@@ -1381,6 +1553,21 @@
       loadingFail:      "Failed to load: ",
       saveFail:         "Failed to save: ",
       deleteFail:       "Failed to delete: ",
+      settingsTitle:    "⚙️ Settings",
+      settingsSysLabel: "System Prompt",
+      settingsSysDesc:  "Customize the AI's role and behavior, applied to every conversation (empty = default)",
+      settingsSave:     "Save",
+      settingsExport:   "Export Chat",
+      settingsSaved:    "✓ Saved",
+      exportEmpty:      "No conversation to export",
+      searchToggleTitle:"Web Search",
+      searchingWeb:     "Searching",
+      shareTitle:       "Share this chat",
+      shareCopy:        "Copy Link",
+      shareCopied:      "Copied!",
+      shareFail:        "Share failed: ",
+      shareViewTitle:   "Shared conversation",
+      shareViewBack:    "Back to Aqulia",
     },
   };
 
@@ -1445,6 +1632,23 @@
     // Conv list empty state
     const ce = document.querySelector(".conv-empty");
     if (ce) ce.textContent = L.convEmpty;
+    // Settings modal
+    const stEl = document.getElementById("settings-title");
+    if (stEl) stEl.textContent = L.settingsTitle;
+    const ssLabel = document.getElementById("settings-sys-label");
+    if (ssLabel) ssLabel.textContent = L.settingsSysLabel;
+    const ssDesc = document.getElementById("settings-sys-desc");
+    if (ssDesc) ssDesc.textContent = L.settingsSysDesc;
+    const ssSave = document.getElementById("settings-save-btn");
+    if (ssSave) ssSave.textContent = L.settingsSave;
+    const ssExp = document.getElementById("settings-export-btn");
+    if (ssExp) ssExp.textContent = L.settingsExport;
+    // Search btn
+    const sb = document.getElementById("searchBtn");
+    if (sb) sb.title = L.searchToggleTitle;
+    // Settings btn
+    const settingsToggle = document.getElementById("settingsBtn");
+    if (settingsToggle) settingsToggle.title = L.settingsTitle;
   }
 
   // ── Dark mode ──
@@ -1686,6 +1890,158 @@
       alert(t("saveFail") + e.message);
     }
   }
+
+  // ── Settings ──
+  function openSettings() {
+    document.getElementById("settings-overlay").classList.remove("hidden");
+    loadSettings();
+  }
+  function closeSettings() {
+    document.getElementById("settings-overlay").classList.add("hidden");
+    document.getElementById("settings-msg").textContent = "";
+  }
+  document.getElementById("settings-overlay").addEventListener("click", function(e) {
+    if (e.target === this) closeSettings();
+  });
+
+  async function loadSettings() {
+    if (!currentUser) return;
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${BASE_URL}/user/profile`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      document.getElementById("sys-prompt-input").value = data.system_prompt || "";
+    } catch (_) {}
+  }
+
+  async function saveSettings() {
+    if (!currentUser) return;
+    const msgEl = document.getElementById("settings-msg");
+    msgEl.style.color = "#0f6e56";
+    msgEl.textContent = "";
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${BASE_URL}/user/profile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ system_prompt: document.getElementById("sys-prompt-input").value.trim() }),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      msgEl.textContent = t("settingsSaved");
+      setTimeout(() => { msgEl.textContent = ""; }, 2000);
+    } catch (e) {
+      msgEl.style.color = "#dc2626";
+      msgEl.textContent = t("saveFail") + e.message;
+    }
+  }
+
+  // ── Export conversation ──
+  function exportConversation() {
+    const messages = document.querySelectorAll("#messages .inner .msg");
+    if (!messages.length) { alert(t("exportEmpty")); return; }
+    let md = `# Aqulia 對話記錄\n${new Date().toLocaleString(_lang === "zh" ? "zh-TW" : "en-US")}\n\n---\n\n`;
+    messages.forEach(msg => {
+      const isUser = msg.classList.contains("user");
+      const bubble = msg.querySelector(".bubble");
+      if (!bubble) return;
+      const role = isUser ? `**${t("userAvatar")}**` : `**${t("aiAvatar")}**`;
+      const text = bubble.innerText || bubble.textContent;
+      md += `${role}\n\n${text.trim()}\n\n---\n\n`;
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([md], { type: "text/markdown" }));
+    a.download = `aqulia-${new Date().toISOString().slice(0,10)}.md`;
+    a.click();
+  }
+
+  // ── Share conversation ──
+  let _shareToastTimer = null;
+
+  async function shareConversation(sid) {
+    if (!currentUser || !sid) return;
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${BASE_URL}/conversations/${encodeURIComponent(sid)}/share`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const shareUrl = `${window.location.origin}${window.location.pathname}?share=${data.share_id}`;
+      showShareToast(shareUrl);
+    } catch (e) {
+      alert(t("shareFail") + e.message);
+    }
+  }
+
+  function showShareToast(url) {
+    document.getElementById("share-link-input").value = url;
+    document.getElementById("share-copy-btn").textContent = t("shareCopy");
+    document.getElementById("share-toast-title").textContent = t("shareTitle");
+    const toast = document.getElementById("share-toast");
+    toast.classList.add("show");
+    clearTimeout(_shareToastTimer);
+    _shareToastTimer = setTimeout(() => toast.classList.remove("show"), 8000);
+  }
+
+  function copyShareLink() {
+    const input = document.getElementById("share-link-input");
+    navigator.clipboard.writeText(input.value).then(() => {
+      const btn = document.getElementById("share-copy-btn");
+      btn.textContent = t("shareCopied");
+      setTimeout(() => { btn.textContent = t("shareCopy"); }, 1800);
+    }).catch(() => { input.select(); document.execCommand("copy"); });
+  }
+
+  // Close share toast when clicking elsewhere
+  document.addEventListener("click", e => {
+    const toast = document.getElementById("share-toast");
+    if (toast.classList.contains("show") && !toast.contains(e.target)) {
+      toast.classList.remove("show");
+    }
+  });
+
+  // ── Shared view (read-only, no auth required) ──
+  (async function checkSharedView() {
+    const params = new URLSearchParams(window.location.search);
+    const shareId = params.get("share");
+    if (!shareId) return;
+
+    // Hide auth overlay + sidebar + input
+    document.getElementById("auth-overlay").classList.add("hidden");
+    document.getElementById("sidebar").style.display = "none";
+    document.getElementById("sidebarBackdrop").style.display = "none";
+    document.querySelector(".input-area").style.display = "none";
+
+    // Replace header
+    const header = document.querySelector(".header");
+    header.innerHTML = `
+      <div class="share-header" style="width:100%;display:flex;align-items:center;gap:12px;">
+        <h2 id="share-view-title" style="font-size:15px;font-weight:600;color:var(--text);flex:1"></h2>
+        <button class="share-back-btn" onclick="window.location.href=window.location.pathname">${t("shareViewBack")}</button>
+      </div>`;
+
+    try {
+      const res = await fetch(`${BASE_URL}/share/${encodeURIComponent(shareId)}`);
+      if (!res.ok) throw new Error("404");
+      const data = await res.json();
+      const title = data.title || t("shareViewTitle");
+      document.getElementById("share-view-title").textContent = title;
+      document.title = title + " — Aqulia";
+      if (data.history?.length) {
+        renderLoadedHistory(data.history);
+      } else {
+        document.querySelector("#messages .inner").innerHTML =
+          `<div class="welcome"><p style="color:var(--text4)">這個分享的對話是空的。</p></div>`;
+      }
+    } catch (_) {
+      document.querySelector("#messages .inner").innerHTML =
+        `<div class="welcome"><p style="color:#dc2626">找不到此分享連結，或連結已失效。</p></div>`;
+    }
+  })();
 
   // ── First-time admin setup ──
   document.getElementById("becomeAdminBtn").onclick = async () => {

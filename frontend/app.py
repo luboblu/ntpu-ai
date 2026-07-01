@@ -8,6 +8,7 @@ import datetime
 from typing import Optional
 
 import uuid
+import secrets
 import httpx
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +27,7 @@ TINY_MODEL_ALIAS  = os.environ.get("TINY_MODEL_ALIAS", "")  # 開源小模型，
 HISTORY_LIMIT     = 10
 GCS_BUCKET        = os.environ.get("GCS_BUCKET", "ntpu-ai-uploads")
 UPLOAD_MAX_BYTES  = 20 * 1024 * 1024  # 20 MB
+SERPER_KEY        = os.environ.get("SERPER_API_KEY", "")
 
 
 # ------------------------------------------------------------------
@@ -69,12 +71,17 @@ class ChatRequest(BaseModel):
     file_gcs_path:  Optional[str] = None
     file_mime_type: Optional[str] = None
     file_name:      Optional[str] = None
+    search_enabled: bool = False
 
 
 class RoutingConfig(BaseModel):
     threshold_tiny: Optional[float] = None   # None = 不啟用開源小模型層
     threshold_large: float = 6.0
     force_model: Optional[str] = None        # None/"small"/"large"/"tiny"
+
+
+class UserProfileRequest(BaseModel):
+    system_prompt: Optional[str] = None
 
 
 # ------------------------------------------------------------------
@@ -171,6 +178,40 @@ def _fs_save_history(uid: str, session_id: str, history: list):
 
 def _fs_delete_session(uid: str, session_id: str):
     _db.collection("users").document(uid).collection("sessions").document(session_id).delete()
+
+
+def _fs_get_user_profile(uid: str) -> dict:
+    doc = _db.collection("users").document(uid).get()
+    return (doc.to_dict() or {}) if doc.exists else {}
+
+
+def _fs_set_user_profile(uid: str, data: dict):
+    _db.collection("users").document(uid).set(data, merge=True)
+
+
+def _fs_create_share(uid: str, session_id: str, history: list, title: str) -> str:
+    share_id = secrets.token_urlsafe(12)
+    _db.collection("public_shares").document(share_id).set({
+        "uid": uid, "session_id": session_id,
+        "history": history, "title": title,
+        "created_at": fb_firestore.SERVER_TIMESTAMP,
+    })
+    return share_id
+
+
+def _fs_get_share(share_id: str) -> dict:
+    doc = _db.collection("public_shares").document(share_id).get()
+    return doc.to_dict() if doc.exists else {}
+
+
+async def get_user_system_prompt(uid: str) -> str:
+    if not _firebase_ready or uid == "anonymous":
+        return ""
+    try:
+        profile = await asyncio.to_thread(_fs_get_user_profile, uid)
+        return profile.get("system_prompt", "")
+    except Exception:
+        return ""
 
 
 def _fs_list_sessions(uid: str) -> list:
@@ -379,6 +420,40 @@ async def build_user_content(message: str, file_gcs_path: Optional[str],
 
 
 # ------------------------------------------------------------------
+# Web search (Serper)
+# ------------------------------------------------------------------
+async def web_search(query: str, count: int = 5) -> str:
+    if not SERPER_KEY:
+        return ""
+    try:
+        async with httpx.AsyncClient() as c:
+            resp = await c.post(
+                "https://google.serper.dev/search",
+                headers={"X-API-KEY": SERPER_KEY, "Content-Type": "application/json"},
+                json={"q": query, "num": count, "gl": "tw", "hl": "zh-tw"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            results = resp.json().get("organic", [])
+            lines = [
+                f"• {r.get('title','')}\n  {r.get('snippet','')}\n  {r.get('link','')}"
+                for r in results[:count] if r.get("title")
+            ]
+            return "\n\n".join(lines)
+    except Exception:
+        return ""
+
+
+def _inject_search(user_content, search_ctx: str):
+    suffix = f"\n\n【網路搜尋結果】\n{search_ctx}"
+    if isinstance(user_content, str):
+        return user_content + suffix
+    parts = list(user_content)
+    parts[0] = {"type": "text", "text": parts[0]["text"] + suffix}
+    return parts
+
+
+# ------------------------------------------------------------------
 # Judge
 # ------------------------------------------------------------------
 JUDGE_SYSTEM_PROMPT = """你是一個路由決策模型，專門負責評估使用者訊息的任務難度，決定要交給輕量模型（Flash）還是強力模型（Pro）處理。
@@ -477,8 +552,15 @@ async def chat(req: ChatRequest, authorization: Optional[str] = Header(None)):
         }[route]
 
         judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})
+        sys_prompt = await get_user_system_prompt(uid)
+        search_ctx = await web_search(req.message) if req.search_enabled and SERPER_KEY else ""
         user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
-        answer_messages = llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
+        if search_ctx:
+            user_content = _inject_search(user_content, search_ctx)
+        answer_messages = []
+        if sys_prompt:
+            answer_messages.append({"role": "system", "content": sys_prompt})
+        answer_messages += llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
         t1 = time.time()
         answer, answer_usage = await call_litellm(client, model_alias, answer_messages)
         answer_elapsed_ms = int((time.time() - t1) * 1000)
@@ -555,9 +637,19 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
                 judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})
                 yield f"data: {json.dumps({'type':'judge','route':route,'model':model_alias,'judge':judge,'judge_elapsed_ms':judge_elapsed_ms})}\n\n"
 
-                # 4. 串流答案（加 stream_options 取得 token 用量）
+                # 4. 準備訊息（含系統提示 + 網路搜尋）
+                sys_prompt = await get_user_system_prompt(uid)
+                search_ctx = ""
+                if req.search_enabled and SERPER_KEY:
+                    yield f"data: {json.dumps({'type':'search'})}\n\n"
+                    search_ctx = await web_search(req.message)
                 user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
-                answer_messages = llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
+                if search_ctx:
+                    user_content = _inject_search(user_content, search_ctx)
+                answer_messages = []
+                if sys_prompt:
+                    answer_messages.append({"role": "system", "content": sys_prompt})
+                answer_messages += llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
                 t1 = time.time()
                 full_content = ""
                 answer_input_tokens  = 0
@@ -652,6 +744,54 @@ async def get_conversation(session_id: str, authorization: Optional[str] = Heade
         raise HTTPException(status_code=401)
     data = await asyncio.to_thread(_fs_get_session_data, uid, session_id)
     return {"session_id": session_id, "history": data.get("history", []), "title": data.get("title", "對話")}
+
+
+@app.get("/user/profile")
+async def get_profile(authorization: Optional[str] = Header(None)):
+    decoded = await decode_token(authorization)
+    uid = decoded.get("uid", "anonymous")
+    if uid == "anonymous":
+        return {"system_prompt": ""}
+    profile = await asyncio.to_thread(_fs_get_user_profile, uid)
+    return {"system_prompt": profile.get("system_prompt", "")}
+
+
+@app.post("/user/profile")
+async def set_profile(data: UserProfileRequest, authorization: Optional[str] = Header(None)):
+    decoded = await decode_token(authorization)
+    uid = decoded.get("uid", "anonymous")
+    if uid == "anonymous":
+        raise HTTPException(status_code=401)
+    await asyncio.to_thread(_fs_set_user_profile, uid, {"system_prompt": data.system_prompt or ""})
+    return {"ok": True}
+
+
+@app.post("/conversations/{session_id}/share")
+async def share_conversation(session_id: str, authorization: Optional[str] = Header(None)):
+    decoded = await decode_token(authorization)
+    uid = decoded.get("uid", "anonymous")
+    if uid == "anonymous":
+        raise HTTPException(status_code=401)
+    history = await get_history(uid, session_id)
+    if not history:
+        raise HTTPException(status_code=404, detail="對話不存在")
+    title = next((_content_str(m["content"])[:40] for m in history if m["role"] == "user"), "對話")
+    public_history = [
+        {"role": m["role"], "content": m["content"],
+         "_route": m.get("_route"), "_score": m.get("_score"), "_reason": m.get("_reason"),
+         "_file_name": m.get("_file_name")}
+        for m in history
+    ]
+    share_id = await asyncio.to_thread(_fs_create_share, uid, session_id, public_history, title)
+    return {"share_id": share_id}
+
+
+@app.get("/share/{share_id}")
+async def get_shared_conversation(share_id: str):
+    data = await asyncio.to_thread(_fs_get_share, share_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="分享連結不存在或已失效")
+    return {"history": data.get("history", []), "title": data.get("title", "對話")}
 
 
 # ------------------------------------------------------------------
