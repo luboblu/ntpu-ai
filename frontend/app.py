@@ -422,7 +422,8 @@ async def build_user_content(message: str, file_gcs_path: Optional[str],
 # ------------------------------------------------------------------
 # Web search (Serper)
 # ------------------------------------------------------------------
-async def web_search(query: str, count: int = 5) -> str:
+async def web_search(query: str, count: int = 5):
+    """Returns search results str, "" on generic error, None on quota exceeded."""
     if not SERPER_KEY:
         return ""
     try:
@@ -433,6 +434,8 @@ async def web_search(query: str, count: int = 5) -> str:
                 json={"q": query, "num": count, "gl": "tw", "hl": "zh-tw"},
                 timeout=10,
             )
+            if resp.status_code in (403, 429):
+                return None  # quota exceeded
             resp.raise_for_status()
             results = resp.json().get("organic", [])
             lines = [
@@ -553,7 +556,10 @@ async def chat(req: ChatRequest, authorization: Optional[str] = Header(None)):
 
         judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})
         sys_prompt = await get_user_system_prompt(uid)
-        search_ctx = await web_search(req.message) if req.search_enabled and SERPER_KEY else ""
+        search_ctx = ""
+        if req.search_enabled and SERPER_KEY:
+            result = await web_search(req.message)
+            search_ctx = result or ""  # None (quota) treated as empty
         user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
         if search_ctx:
             user_content = _inject_search(user_content, search_ctx)
@@ -642,7 +648,11 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
                 search_ctx = ""
                 if req.search_enabled and SERPER_KEY:
                     yield f"data: {json.dumps({'type':'search'})}\n\n"
-                    search_ctx = await web_search(req.message)
+                    result = await web_search(req.message)
+                    if result is None:
+                        yield f"data: {json.dumps({'type':'search_quota'})}\n\n"
+                    else:
+                        search_ctx = result
                 user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
                 if search_ctx:
                     user_content = _inject_search(user_content, search_ctx)

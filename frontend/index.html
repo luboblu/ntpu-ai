@@ -516,15 +516,26 @@
   .settings-msg { font-size: 12px; color: #0f6e56; margin-top: 10px; min-height: 18px; }
   .settings-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 
-  /* ── Search button ── */
-  .search-btn {
-    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border3);
-    background: var(--bg2); color: var(--text4); cursor: pointer;
-    font-size: 15px; display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; transition: all .15s;
+  /* ── Attach dropdown menu ── */
+  .attach-menu-wrap { position: relative; flex-shrink: 0; }
+  .attach-menu {
+    position: absolute; bottom: calc(100% + 8px); left: 0;
+    background: var(--bg2); border: 1px solid var(--border3); border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.18); overflow: hidden;
+    min-width: 160px; display: none; z-index: 50;
   }
-  .search-btn:hover { background: var(--sidebar-hover); color: var(--text2); }
-  .search-btn.active { background: #7c3aed; color: white; border-color: #7c3aed; }
+  .attach-menu.show { display: block; }
+  .attach-menu-item {
+    padding: 11px 14px; font-size: 13px; color: var(--text2);
+    cursor: pointer; display: flex; align-items: center; gap: 9px;
+    transition: background .1s; white-space: nowrap;
+  }
+  .attach-menu-item:hover:not(.disabled) { background: var(--sidebar-hover); }
+  .attach-menu-item.disabled { color: var(--text5); cursor: not-allowed; opacity: .5; }
+  .attach-menu-item.active { color: #7c3aed; font-weight: 600; }
+  .attach-menu-item.active .menu-check { display: inline; }
+  .menu-check { display: none; margin-left: auto; font-size: 12px; color: #7c3aed; font-weight: 700; }
+  .attach-btn.search-on { border-color: #7c3aed; color: #7c3aed; }
 
   /* ── Conv item with share ── */
   .conv-item {
@@ -716,10 +727,15 @@
     <div class="input-wrap">
       <div class="attach-preview" id="attachPreview"></div>
       <div class="input-row">
-        <button class="attach-btn" id="attachBtn" title="上傳檔案">&#x2B;</button>
+        <div class="attach-menu-wrap">
+          <button class="attach-btn" id="attachBtn" title="上傳 / 搜尋">&#x2B;</button>
+          <div class="attach-menu" id="attachMenu">
+            <div class="attach-menu-item" id="menuFileItem">📎 <span id="menu-file-label">上傳檔案</span></div>
+            <div class="attach-menu-item" id="menuSearchItem">🔍 <span id="menu-search-label">網路搜尋</span><span class="menu-check">✓</span></div>
+          </div>
+        </div>
         <input type="file" id="fileInput" style="display:none" />
         <textarea id="input" placeholder="輸入訊息… (Enter 送出，Shift+Enter 換行)" rows="1" autocomplete="off"></textarea>
-        <button class="search-btn" id="searchBtn" title="網路搜尋">🔍</button>
         <button class="send-btn" id="sendBtn">&#x2191;</button>
       </div>
     </div>
@@ -1039,11 +1055,6 @@
   // ── File upload ──
   let pendingFile = null; // { gcs_path, mime_type, filename }
 
-  document.getElementById("attachBtn").onclick = () => {
-    if (!currentUser) return;
-    document.getElementById("fileInput").click();
-  };
-
   document.getElementById("fileInput").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1257,16 +1268,43 @@
     ta.style.height = Math.min(ta.scrollHeight, 160) + "px";
   });
 
-  let _abortCtrl    = null;
-  let _sending      = false;
-  let _searchEnabled = false;
-  const sendBtn     = document.getElementById("sendBtn");
-  const searchBtn   = document.getElementById("searchBtn");
+  let _abortCtrl         = null;
+  let _sending           = false;
+  let _searchEnabled     = false;
+  let _searchQuotaExceeded = false;
+  const sendBtn          = document.getElementById("sendBtn");
 
-  searchBtn.onclick = () => {
-    _searchEnabled = !_searchEnabled;
-    searchBtn.classList.toggle("active", _searchEnabled);
+  // ── Attach dropdown ──
+  const attachBtn  = document.getElementById("attachBtn");
+  const attachMenu = document.getElementById("attachMenu");
+
+  attachBtn.onclick = (e) => {
+    e.stopPropagation();
+    attachMenu.classList.toggle("show");
   };
+  document.addEventListener("click", () => attachMenu.classList.remove("show"));
+
+  document.getElementById("menuFileItem").onclick = (e) => {
+    e.stopPropagation();
+    attachMenu.classList.remove("show");
+    if (!currentUser) return;
+    document.getElementById("fileInput").click();
+  };
+
+  document.getElementById("menuSearchItem").onclick = (e) => {
+    e.stopPropagation();
+    if (_searchQuotaExceeded) return;
+    _searchEnabled = !_searchEnabled;
+    _updateSearchUI();
+    attachMenu.classList.remove("show");
+  };
+
+  function _updateSearchUI() {
+    const item = document.getElementById("menuSearchItem");
+    item.classList.toggle("active", _searchEnabled && !_searchQuotaExceeded);
+    item.classList.toggle("disabled", _searchQuotaExceeded);
+    attachBtn.classList.toggle("search-on", _searchEnabled && !_searchQuotaExceeded);
+  }
 
   function _setSend() {
     _sending = false; _abortCtrl = null;
@@ -1337,6 +1375,10 @@
             } else if (evt.type === "search" && streamRow) {
               const b = streamRow.querySelector("#stream-bubble");
               if (b) b.innerHTML = `<span style="color:var(--text5);font-size:13px">🔍 ${t("searchingWeb")}…</span>`;
+            } else if (evt.type === "search_quota") {
+              _searchQuotaExceeded = true; _searchEnabled = false; _updateSearchUI();
+              const b = streamRow?.querySelector("#stream-bubble");
+              if (b) b.innerHTML = "";
             } else if (evt.type === "token" && streamRow) {
               fullText += evt.content;
               _updateStream(streamRow, fullText);
@@ -1460,6 +1502,9 @@
       exportEmpty:      "目前沒有對話可以匯出",
       searchToggleTitle:"網路搜尋",
       searchingWeb:     "搜尋中",
+      menuFile:         "上傳檔案",
+      menuSearch:       "網路搜尋",
+      searchQuota:      "網路搜尋免費額度已用完",
       shareTitle:       "分享此對話",
       shareCopy:        "複製連結",
       shareCopied:      "已複製！",
@@ -1562,6 +1607,9 @@
       exportEmpty:      "No conversation to export",
       searchToggleTitle:"Web Search",
       searchingWeb:     "Searching",
+      menuFile:         "Upload File",
+      menuSearch:       "Web Search",
+      searchQuota:      "Web search free quota reached",
       shareTitle:       "Share this chat",
       shareCopy:        "Copy Link",
       shareCopied:      "Copied!",
@@ -1643,9 +1691,11 @@
     if (ssSave) ssSave.textContent = L.settingsSave;
     const ssExp = document.getElementById("settings-export-btn");
     if (ssExp) ssExp.textContent = L.settingsExport;
-    // Search btn
-    const sb = document.getElementById("searchBtn");
-    if (sb) sb.title = L.searchToggleTitle;
+    // Attach menu labels
+    const mfl = document.getElementById("menu-file-label");
+    if (mfl) mfl.textContent = L.menuFile || "上傳檔案";
+    const msl = document.getElementById("menu-search-label");
+    if (msl) msl.textContent = L.menuSearch || "網路搜尋";
     // Settings btn
     const settingsToggle = document.getElementById("settingsBtn");
     if (settingsToggle) settingsToggle.title = L.settingsTitle;
