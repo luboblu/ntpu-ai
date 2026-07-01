@@ -436,9 +436,10 @@ async def web_search(query: str, count: int = 5):
                     "query": query,
                     "max_results": count,
                     "include_answer": True,
-                    "search_depth": "basic",
+                    "search_depth": "advanced",
+                    "days": 30,          # 只抓近 30 天的結果
                 },
-                timeout=15,
+                timeout=20,
             )
             if resp.status_code in (401, 403, 429):
                 try:
@@ -450,22 +451,29 @@ async def web_search(query: str, count: int = 5):
                 return ""  # key 無效或其他錯誤，不鎖死按鈕
             resp.raise_for_status()
             data = resp.json()
-            lines = []
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            lines = [f"（搜尋日期：{today}）"]
             if data.get("answer"):
                 lines.append(f"摘要：{data['answer']}")
             for r in data.get("results", [])[:count]:
                 title   = r.get("title", "")
-                content = r.get("content", "")[:200]
+                content = r.get("content", "")[:300]
                 url     = r.get("url", "")
+                pub     = r.get("published_date", "")
+                date_str = f" [{pub}]" if pub else ""
                 if title:
-                    lines.append(f"• {title}\n  {content}\n  {url}")
+                    lines.append(f"• {title}{date_str}\n  {content}\n  {url}")
             return "\n\n".join(lines)
     except Exception:
         return ""
 
 
 def _inject_search(user_content, search_ctx: str):
-    suffix = f"\n\n【網路搜尋結果】\n{search_ctx}"
+    suffix = (
+        f"\n\n【即時網路搜尋結果】\n{search_ctx}\n\n"
+        "請根據以上即時搜尋結果回答，優先使用搜尋結果中的資訊，"
+        "不要依賴你的訓練資料。若搜尋結果沒有足夠資訊，請直接說明。"
+    )
     if isinstance(user_content, str):
         return user_content + suffix
     parts = list(user_content)
