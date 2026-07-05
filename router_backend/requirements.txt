@@ -5,3 +5,4 @@ pydantic==2.9.2
 firebase-admin==6.5.0
 google-cloud-storage==2.18.0
 python-multipart==0.0.12
+openai==1.35.0

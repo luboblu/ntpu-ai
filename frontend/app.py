@@ -28,6 +28,7 @@ HISTORY_LIMIT     = 10
 GCS_BUCKET        = os.environ.get("GCS_BUCKET", "ntpu-ai-uploads")
 UPLOAD_MAX_BYTES  = 20 * 1024 * 1024  # 20 MB
 TAVILY_KEY        = os.environ.get("TAVILY_API_KEY", "")
+OPENAI_API_KEY    = os.environ.get("OPENAI_API_KEY", "")
 
 
 # ------------------------------------------------------------------
@@ -72,6 +73,7 @@ class ChatRequest(BaseModel):
     file_mime_type: Optional[str] = None
     file_name:      Optional[str] = None
     search_enabled: bool = False
+    ntpu_search_enabled: bool = False
 
 
 class RoutingConfig(BaseModel):
@@ -87,15 +89,30 @@ class UserProfileRequest(BaseModel):
 # ------------------------------------------------------------------
 # Auth helpers
 # ------------------------------------------------------------------
+ALLOWED_DOMAINS = {"gm.ntpu.edu.tw", "ms.ntpu.edu.tw"}
+
+
 async def decode_token(authorization: Optional[str]) -> dict:
     if not _firebase_ready:
         return {"uid": "anonymous", "email": ""}
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth token")
     try:
-        return await asyncio.to_thread(fb_auth.verify_id_token, authorization[7:])
+        decoded = await asyncio.to_thread(fb_auth.verify_id_token, authorization[7:])
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid auth token")
+
+    sign_in_provider = decoded.get("firebase", {}).get("sign_in_provider", "")
+    if sign_in_provider == "google.com" and not decoded.get("admin"):
+        email = decoded.get("email", "")
+        domain = email.split("@")[-1] if "@" in email else ""
+        if domain not in ALLOWED_DOMAINS:
+            raise HTTPException(
+                status_code=403,
+                detail="僅限 NTPU 師生帳號（@gm.ntpu.edu.tw）登入",
+            )
+
+    return decoded
 
 
 async def verify_token(authorization: Optional[str] = Header(None)) -> str:
@@ -212,6 +229,14 @@ async def get_user_system_prompt(uid: str) -> str:
         return profile.get("system_prompt", "")
     except Exception:
         return ""
+
+
+def build_system_prompt(user_sys_prompt: str) -> str:
+    today = datetime.datetime.now(tz=datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d")
+    date_line = f"今天的日期是 {today}（台灣時間）。"
+    if user_sys_prompt:
+        return f"{date_line}\n\n{user_sys_prompt}"
+    return date_line
 
 
 def _fs_list_sessions(uid: str) -> list:
@@ -422,39 +447,44 @@ async def build_user_content(message: str, file_gcs_path: Optional[str],
 # ------------------------------------------------------------------
 # Web search (Serper)
 # ------------------------------------------------------------------
-async def web_search(query: str, count: int = 5):
-    """Returns search results str, "" on generic error, None on quota exceeded."""
+async def web_search(query: str, count: int = 5, ntpu_only: bool = False) -> dict:
+    """Returns {"status": "ok"|"empty"|"quota"|"error", "text": str}."""
     if not TAVILY_KEY:
-        return ""
+        return {"status": "error", "text": ""}
     try:
+        payload: dict = {
+            "api_key": TAVILY_KEY,
+            "query": query,
+            "max_results": count,
+            "include_answer": True,
+            "search_depth": "advanced",
+        }
+        if ntpu_only:
+            payload["include_domains"] = ["ntpu.edu.tw"]
+        else:
+            payload["days"] = 30
         async with httpx.AsyncClient() as c:
             resp = await c.post(
                 "https://api.tavily.com/search",
                 headers={"Content-Type": "application/json"},
-                json={
-                    "api_key": TAVILY_KEY,
-                    "query": query,
-                    "max_results": count,
-                    "include_answer": True,
-                    "search_depth": "advanced",
-                    "days": 30,          # 只抓近 30 天的結果
-                },
+                json=payload,
                 timeout=20,
             )
             if resp.status_code in (401, 403, 429):
                 try:
                     msg = str(resp.json()).lower()
                     if any(k in msg for k in ("quota", "limit", "exceeded", "plan")):
-                        return None  # 額度用完
+                        return {"status": "quota", "text": ""}
                 except Exception:
                     pass
-                return ""  # key 無效或其他錯誤，不鎖死按鈕
+                return {"status": "error", "text": ""}
             resp.raise_for_status()
             data = resp.json()
             today = datetime.datetime.now().strftime("%Y-%m-%d")
             lines = [f"（搜尋日期：{today}）"]
             if data.get("answer"):
                 lines.append(f"摘要：{data['answer']}")
+            found = 0
             for r in data.get("results", [])[:count]:
                 title   = r.get("title", "")
                 content = r.get("content", "")[:300]
@@ -463,17 +493,32 @@ async def web_search(query: str, count: int = 5):
                 date_str = f" [{pub}]" if pub else ""
                 if title:
                     lines.append(f"• {title}{date_str}\n  {content}\n  {url}")
-            return "\n\n".join(lines)
+                    found += 1
+            # 只有摘要（answer）但沒有任何實際結果時，視為查無資料，避免 AI 拿空殼編造
+            if found == 0:
+                return {"status": "empty", "text": ""}
+            return {"status": "ok", "text": "\n\n".join(lines)}
     except Exception:
-        return ""
+        return {"status": "error", "text": ""}
 
 
-def _inject_search(user_content, search_ctx: str):
-    suffix = (
-        f"\n\n【即時網路搜尋結果】\n{search_ctx}\n\n"
-        "請根據以上即時搜尋結果回答，優先使用搜尋結果中的資訊，"
-        "不要依賴你的訓練資料。若搜尋結果沒有足夠資訊，請直接說明。"
-    )
+def _inject_search(user_content, search_ctx: str, *, has_results: bool, ntpu: bool = False):
+    scope = "臺北大學官方網站（ntpu.edu.tw）" if ntpu else "即時網路"
+    if has_results:
+        suffix = (
+            f"\n\n【{scope}搜尋結果】\n{search_ctx}\n\n"
+            f"請嚴格根據以上搜尋結果回答，只能使用搜尋結果中出現的資訊，"
+            f"不要依賴你的訓練資料。搜尋結果沒有提到的內容（包括日期、公告標題、"
+            f"活動、連結等），一律不得自行編造或推測。回答時請附上對應的來源網址。"
+            f"若搜尋結果不足以回答問題，請直接說明「搜尋結果中沒有相關資訊」。"
+        )
+    else:
+        suffix = (
+            f"\n\n【{scope}搜尋結果：查無相關資料】\n"
+            f"本次搜尋沒有找到任何符合的結果。請明確告訴使用者「在{scope}上查不到相關資料」，"
+            f"並建議對方確認關鍵字或直接前往官方網站查詢。"
+            f"絕對不要用你的訓練資料編造答案、日期、公告內容、活動或連結。"
+        )
     if isinstance(user_content, str):
         return user_content + suffix
     parts = list(user_content)
@@ -581,16 +626,17 @@ async def chat(req: ChatRequest, authorization: Optional[str] = Header(None)):
 
         judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})
         sys_prompt = await get_user_system_prompt(uid)
-        search_ctx = ""
-        if req.search_enabled and TAVILY_KEY:
-            result = await web_search(req.message)
-            search_ctx = result or ""  # None (quota) treated as empty
         user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
-        if search_ctx:
-            user_content = _inject_search(user_content, search_ctx)
-        answer_messages = []
-        if sys_prompt:
-            answer_messages.append({"role": "system", "content": sys_prompt})
+        if (req.search_enabled or req.ntpu_search_enabled) and TAVILY_KEY:
+            sr = await web_search(req.message, ntpu_only=req.ntpu_search_enabled)
+            if sr["status"] == "ok":
+                user_content = _inject_search(user_content, sr["text"],
+                                              has_results=True, ntpu=req.ntpu_search_enabled)
+            elif sr["status"] == "empty":
+                user_content = _inject_search(user_content, "",
+                                              has_results=False, ntpu=req.ntpu_search_enabled)
+            # quota / error：不注入，維持原行為
+        answer_messages = [{"role": "system", "content": build_system_prompt(sys_prompt)}]
         answer_messages += llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
         t1 = time.time()
         answer, answer_usage = await call_litellm(client, model_alias, answer_messages)
@@ -670,20 +716,20 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
 
                 # 4. 準備訊息（含系統提示 + 網路搜尋）
                 sys_prompt = await get_user_system_prompt(uid)
-                search_ctx = ""
-                if req.search_enabled and TAVILY_KEY:
-                    yield f"data: {json.dumps({'type':'search'})}\n\n"
-                    result = await web_search(req.message)
-                    if result is None:
-                        yield f"data: {json.dumps({'type':'search_quota'})}\n\n"
-                    else:
-                        search_ctx = result
                 user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
-                if search_ctx:
-                    user_content = _inject_search(user_content, search_ctx)
-                answer_messages = []
-                if sys_prompt:
-                    answer_messages.append({"role": "system", "content": sys_prompt})
+                if (req.search_enabled or req.ntpu_search_enabled) and TAVILY_KEY:
+                    yield f"data: {json.dumps({'type':'search'})}\n\n"
+                    sr = await web_search(req.message, ntpu_only=req.ntpu_search_enabled)
+                    if sr["status"] == "quota":
+                        yield f"data: {json.dumps({'type':'search_quota'})}\n\n"
+                    elif sr["status"] == "ok":
+                        user_content = _inject_search(user_content, sr["text"],
+                                                      has_results=True, ntpu=req.ntpu_search_enabled)
+                    elif sr["status"] == "empty":
+                        user_content = _inject_search(user_content, "",
+                                                      has_results=False, ntpu=req.ntpu_search_enabled)
+                    # error：不注入，維持原行為
+                answer_messages = [{"role": "system", "content": build_system_prompt(sys_prompt)}]
                 answer_messages += llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
                 t1 = time.time()
                 full_content = ""
@@ -779,6 +825,17 @@ async def get_conversation(session_id: str, authorization: Optional[str] = Heade
         raise HTTPException(status_code=401)
     data = await asyncio.to_thread(_fs_get_session_data, uid, session_id)
     return {"session_id": session_id, "history": data.get("history", []), "title": data.get("title", "對話")}
+
+
+@app.get("/me")
+async def get_me(authorization: Optional[str] = Header(None)):
+    """Verify token and return basic user info (also enforces domain check)."""
+    decoded = await decode_token(authorization)
+    return {
+        "uid":   decoded.get("uid", "anonymous"),
+        "email": decoded.get("email", ""),
+        "admin": bool(decoded.get("admin")),
+    }
 
 
 @app.get("/user/profile")
@@ -950,6 +1007,27 @@ async def upload_file(
         "mime_type": file.content_type,
         "size":      len(content),
     }
+
+
+@app.post("/transcribe")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    authorization: Optional[str] = Header(None),
+):
+    await decode_token(authorization)
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=503, detail="語音轉文字功能未啟用")
+    audio_bytes = await file.read()
+    if len(audio_bytes) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="音檔過大（上限 25 MB）")
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    transcript = await client.audio.transcriptions.create(
+        model="whisper-1",
+        file=(file.filename or "audio.webm", audio_bytes, file.content_type or "audio/webm"),
+        language="zh",
+    )
+    return {"text": transcript.text}
 
 
 @app.get("/health")

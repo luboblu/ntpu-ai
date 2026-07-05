@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Aqulia 艾奎拉計畫</title>
+<title>NTPU AI</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -55,11 +55,33 @@
   #auth-overlay.hidden { display: none; }
   .auth-card {
     background: var(--auth-bg); border-radius: 16px;
-    padding: 36px 32px; width: 360px;
+    padding: 36px 32px; width: 380px; max-width: 94vw;
     box-shadow: 0 8px 40px rgba(0,0,0,.3);
   }
+  .auth-logo { font-size: 32px; margin-bottom: 8px; }
   .auth-card h2 { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
   .auth-subtitle { font-size: 13px; color: var(--text4); margin-bottom: 24px; }
+
+  /* Google Sign-In button */
+  .google-btn {
+    width: 100%; padding: 11px 16px; border-radius: 10px;
+    border: 1.5px solid var(--border3); background: var(--bg);
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer;
+    transition: box-shadow .15s, background .15s; margin-bottom: 6px;
+  }
+  .google-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); background: var(--bg3); }
+  .google-btn svg { flex-shrink: 0; }
+  .google-btn-sub { font-size: 11px; color: var(--text5); text-align: center; margin-bottom: 20px; }
+
+  /* Admin fallback section */
+  .auth-divider {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--text5); margin-bottom: 14px;
+  }
+  .auth-divider::before,.auth-divider::after {
+    content:""; flex:1; height:1px; background: var(--border3);
+  }
   .auth-input {
     width: 100%; padding: 10px 12px;
     border: 1px solid var(--auth-border); border-radius: 8px;
@@ -77,6 +99,13 @@
   .auth-btn.primary:hover { background: #6d2fd4; }
   .auth-btn.secondary { background: var(--bg3); color: var(--text3); border: 1px solid var(--border3); }
   .auth-btn.secondary:hover { filter: brightness(0.95); }
+  .admin-toggle {
+    font-size: 12px; color: var(--text5); background: none; border: none;
+    cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+    display: block; margin: 0 auto;
+  }
+  .admin-toggle:hover { color: var(--text3); }
+  #admin-login-section { display: none; margin-top: 4px; }
 
   /* ── Sidebar ── */
   .sidebar {
@@ -307,6 +336,21 @@
     padding: 0; vertical-align: middle;
   }
   textarea::placeholder { color: var(--text5); }
+  .mic-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--border3);
+    background: var(--bg2); color: var(--text3); font-size: 16px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: background .15s, border-color .15s, color .15s;
+  }
+  .mic-btn:hover { background: var(--sidebar-hover); color: var(--text2); }
+  .mic-btn.recording {
+    border-color: #e53e3e; color: #e53e3e; background: rgba(229,62,62,.1);
+    animation: mic-pulse 1s ease-in-out infinite;
+  }
+  @keyframes mic-pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(229,62,62,.4); }
+    50%      { box-shadow: 0 0 0 6px rgba(229,62,62,0); }
+  }
   .send-btn {
     width: 32px; height: 32px; border-radius: 8px; border: none;
     background: #7c3aed; color: white; cursor: pointer;
@@ -534,8 +578,12 @@
   .attach-menu-item.disabled { color: var(--text5); cursor: not-allowed; opacity: .5; }
   .attach-menu-item.active { color: #7c3aed; font-weight: 600; }
   .attach-menu-item.active .menu-check { display: inline; }
+  .attach-menu-item.ntpu-active { color: #2563eb; font-weight: 600; }
+  .attach-menu-item.ntpu-active .ntpu-check { display: inline; }
   .menu-check { display: none; margin-left: auto; font-size: 12px; color: #7c3aed; font-weight: 700; }
+  .ntpu-check { display: none; margin-left: auto; font-size: 12px; color: #2563eb; font-weight: 700; }
   .attach-btn.search-on { border-color: #7c3aed; color: #7c3aed; }
+  .attach-btn.ntpu-on { border-color: #2563eb; color: #2563eb; }
 
   /* ── Conv item with share ── */
   .conv-item {
@@ -608,13 +656,29 @@
 <!-- ── Auth overlay ── -->
 <div id="auth-overlay">
   <div class="auth-card">
-    <h2 id="auth-title">登入</h2>
-    <p class="auth-subtitle" id="auth-sub">登入後即可開始對話，紀錄將自動儲存</p>
-    <input class="auth-input" id="auth-email" type="email" placeholder="電子郵件" autocomplete="email" />
-    <input class="auth-input" id="auth-pass"  type="password" placeholder="密碼（至少 6 碼）" autocomplete="current-password" />
+    <div class="auth-logo">🎓</div>
+    <h2 id="auth-title">歡迎使用 NTPU AI</h2>
+    <p class="auth-subtitle" id="auth-sub">請使用 NTPU Google 帳號登入</p>
+    <button class="google-btn" id="googleSignInBtn">
+      <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908C16.658 14.013 17.64 11.705 17.64 9.2z"/>
+        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.859-3.048.859-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+        <path fill="#FBBC05" d="M3.964 10.705A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.705V4.963H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.037l3.007-2.332z"/>
+        <path fill="#EA4335" d="M9 3.584c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.963L3.964 7.295C4.672 5.168 6.656 3.584 9 3.584z"/>
+      </svg>
+      <span id="google-btn-text">使用 Google 帳號登入</span>
+    </button>
+    <p class="google-btn-sub" id="auth-domain-hint">僅限 @gm.ntpu.edu.tw 帳號</p>
     <div class="auth-err" id="auth-err"></div>
-    <button class="auth-btn primary" id="auth-submit">登入</button>
-    <button class="auth-btn secondary" id="auth-switch">還沒有帳號？ 點此註冊</button>
+    <!-- Admin email/password fallback -->
+    <div id="admin-login-section">
+      <div class="auth-divider" id="auth-divider-text">管理員登入</div>
+      <input class="auth-input" id="auth-email" type="email" placeholder="電子郵件" autocomplete="email" />
+      <input class="auth-input" id="auth-pass"  type="password" placeholder="密碼（至少 6 碼）" autocomplete="current-password" />
+      <button class="auth-btn primary" id="auth-submit">登入</button>
+      <button class="auth-btn secondary" id="auth-signup-btn" style="font-size:13px">還沒有帳號？ 點此註冊</button>
+    </div>
+    <button class="admin-toggle" id="admin-toggle-btn">管理員入口</button>
   </div>
 </div>
 
@@ -703,7 +767,7 @@
 <div class="main">
   <div class="header">
     <button class="toggle-btn" id="sidebarToggle">&#x2630;</button>
-    <h1>Aqulia 艾奎拉計畫</h1>
+    <h1>NTPU AI</h1>
     <div class="header-right">
       <span class="user-email" id="user-email"></span>
       <button class="admin-btn" id="adminBtn" onclick="openAdmin()">&#x1F6E1;&#xFE0F; 管理員</button>
@@ -732,10 +796,12 @@
           <div class="attach-menu" id="attachMenu">
             <div class="attach-menu-item" id="menuFileItem">📎 <span id="menu-file-label">上傳檔案</span></div>
             <div class="attach-menu-item" id="menuSearchItem">🔍 <span id="menu-search-label">網路搜尋</span><span class="menu-check">✓</span></div>
+            <div class="attach-menu-item" id="menuNtpuItem">🏫 <span id="menu-ntpu-label">NTPU 校內搜尋</span><span class="menu-check ntpu-check">✓</span></div>
           </div>
         </div>
         <input type="file" id="fileInput" style="display:none" />
         <textarea id="input" placeholder="輸入訊息… (Enter 送出，Shift+Enter 換行)" rows="1" autocomplete="off"></textarea>
+        <button class="mic-btn" id="micBtn" title="語音輸入">🎤</button>
         <button class="send-btn" id="sendBtn">&#x2191;</button>
       </div>
     </div>
@@ -808,16 +874,28 @@
   const auth = firebase.auth();
 
   // ── Auth UI ──
-  let isSignUp = false;
-  document.getElementById("auth-switch").onclick = () => {
-    isSignUp = !isSignUp;
-    document.getElementById("auth-title").textContent  = isSignUp ? t("authTitle_signup")  : t("authTitle_login");
-    document.getElementById("auth-sub").textContent    = isSignUp ? t("authSub_signup")    : t("authSub_login");
-    document.getElementById("auth-submit").textContent = isSignUp ? t("authSubmit_signup") : t("authSubmit_login");
-    document.getElementById("auth-switch").textContent = isSignUp ? t("authSwitch_signup") : t("authSwitch_login");
-    document.getElementById("auth-err").textContent = "";
+  const googleProvider = new firebase.auth.GoogleAuthProvider();
+  googleProvider.setCustomParameters({ prompt: "select_account" });
+
+  document.getElementById("googleSignInBtn").onclick = async () => {
+    const errEl = document.getElementById("auth-err");
+    errEl.textContent = "";
+    try {
+      await auth.signInWithPopup(googleProvider);
+      // domain check happens in onAuthStateChanged via /me call
+    } catch (e) {
+      if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") return;
+      errEl.textContent = e.message;
+    }
   };
-  document.getElementById("auth-submit").onclick = async () => {
+
+  // Admin email/password fallback
+  let _adminSectionOpen = false;
+  document.getElementById("admin-toggle-btn").onclick = () => {
+    _adminSectionOpen = !_adminSectionOpen;
+    document.getElementById("admin-login-section").style.display = _adminSectionOpen ? "block" : "none";
+  };
+  async function _adminAuth(isSignUp) {
     const email = document.getElementById("auth-email").value.trim();
     const pass  = document.getElementById("auth-pass").value;
     const errEl = document.getElementById("auth-err");
@@ -829,13 +907,17 @@
       const MAP = t("authErr");
       errEl.textContent = MAP[e.code] || e.message;
     }
-  };
+  }
+  document.getElementById("auth-submit").onclick = () => _adminAuth(false);
+  document.getElementById("auth-signup-btn").onclick = () => _adminAuth(true);
   ["auth-email","auth-pass"].forEach(id =>
     document.getElementById(id).addEventListener("keydown", e => {
-      if (e.key === "Enter") document.getElementById("auth-submit").click();
+      if (e.key === "Enter") _adminAuth(false);
     })
   );
-  document.getElementById("logoutBtn").onclick = () => auth.signOut();
+  document.getElementById("logoutBtn").onclick = () => {
+    if (confirm(t("logoutConfirm"))) auth.signOut();
+  };
 
   // ── Sidebar toggle (mobile) ──
   const sidebar  = document.getElementById("sidebar");
@@ -857,6 +939,20 @@
   auth.onAuthStateChanged(async user => {
     currentUser = user;
     if (user) {
+      // For Google sign-ins: verify domain via backend before granting access
+      const errEl = document.getElementById("auth-err");
+      try {
+        const token = await user.getIdToken();
+        const meRes = await fetch(`${BASE_URL}/me`, { headers: { "Authorization": `Bearer ${token}` } });
+        if (!meRes.ok) {
+          const body = await meRes.json().catch(() => ({}));
+          errEl.textContent = body.detail || "帳號不符合登入資格";
+          await auth.signOut();
+          return;
+        }
+        errEl.textContent = "";
+      } catch (_) {}
+
       document.getElementById("auth-overlay").classList.add("hidden");
       document.getElementById("user-email").textContent = user.email;
       const key = `ai_session_${user.uid}`;
@@ -868,7 +964,7 @@
         const result = await user.getIdTokenResult(true);
         isAdmin = result.claims.admin === true;
       } catch (_) { isAdmin = false; }
-      document.getElementById("adminBtn").style.display = "inline-flex";
+      document.getElementById("adminBtn").style.display = isAdmin ? "inline-flex" : "none";
 
       await loadConversations();
 
@@ -891,6 +987,10 @@
       document.getElementById("adminBtn").style.display = "none";
       sessionId = null; isAdmin = false;
       renderConvList([]);
+      resetUI();
+      clearAttachPreview();
+      _searchEnabled = false; _searchQuotaExceeded = false; _ntpuSearchEnabled = false; _updateSearchUI();
+      document.getElementById("input").value = "";
     }
   });
 
@@ -1272,6 +1372,7 @@
   let _sending           = false;
   let _searchEnabled     = false;
   let _searchQuotaExceeded = false;
+  let _ntpuSearchEnabled = false;
   const sendBtn          = document.getElementById("sendBtn");
 
   // ── Attach dropdown ──
@@ -1295,6 +1396,15 @@
     e.stopPropagation();
     if (_searchQuotaExceeded) return;
     _searchEnabled = !_searchEnabled;
+    if (_searchEnabled) _ntpuSearchEnabled = false; // 互斥
+    _updateSearchUI();
+    attachMenu.classList.remove("show");
+  };
+
+  document.getElementById("menuNtpuItem").onclick = (e) => {
+    e.stopPropagation();
+    _ntpuSearchEnabled = !_ntpuSearchEnabled;
+    if (_ntpuSearchEnabled) _searchEnabled = false; // 互斥
     _updateSearchUI();
     attachMenu.classList.remove("show");
   };
@@ -1303,7 +1413,12 @@
     const item = document.getElementById("menuSearchItem");
     item.classList.toggle("active", _searchEnabled && !_searchQuotaExceeded);
     item.classList.toggle("disabled", _searchQuotaExceeded);
+
+    const ntpuItem = document.getElementById("menuNtpuItem");
+    ntpuItem.classList.toggle("ntpu-active", _ntpuSearchEnabled);
+
     attachBtn.classList.toggle("search-on", _searchEnabled && !_searchQuotaExceeded);
+    attachBtn.classList.toggle("ntpu-on", _ntpuSearchEnabled);
   }
 
   function _setSend() {
@@ -1316,6 +1431,61 @@
   }
 
   sendBtn.onclick = () => { _sending ? _abortCtrl?.abort() : send(); };
+
+  // ── Voice input (Whisper) ──
+  let _mediaRecorder = null;
+  let _audioChunks   = [];
+  let _isRecording   = false;
+
+  const micBtn = document.getElementById("micBtn");
+
+  micBtn.onclick = async () => {
+    if (_isRecording) {
+      _mediaRecorder?.stop();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus" : "audio/webm";
+      _mediaRecorder = new MediaRecorder(stream, { mimeType });
+      _audioChunks = [];
+      _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
+      _mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        _isRecording = false;
+        micBtn.classList.remove("recording");
+        micBtn.title = t("micTitle");
+        const blob = new Blob(_audioChunks, { type: mimeType });
+        if (blob.size < 1000) return; // too short, ignore
+        micBtn.textContent = "⏳";
+        micBtn.disabled = true;
+        try {
+          const token = await currentUser.getIdToken();
+          const fd = new FormData();
+          fd.append("file", blob, "audio.webm");
+          const res = await fetch(`${BASE_URL}/transcribe`, {
+            method: "POST", headers: { "Authorization": `Bearer ${token}` }, body: fd,
+          });
+          const data = await res.json();
+          if (res.ok && data.text) {
+            ta.value = (ta.value ? ta.value + " " : "") + data.text;
+            ta.dispatchEvent(new Event("input"));
+            ta.focus();
+          } else {
+            alert(data.detail || t("micError"));
+          }
+        } catch (_) { alert(t("micError")); }
+        finally { micBtn.textContent = "🎤"; micBtn.disabled = false; }
+      };
+      _mediaRecorder.start();
+      _isRecording = true;
+      micBtn.classList.add("recording");
+      micBtn.title = t("micStop");
+    } catch (e) {
+      alert(t("micPermission"));
+    }
+  };
 
   async function send() {
     if (_sending || !currentUser || !sessionId) return;
@@ -1347,6 +1517,7 @@
           file_mime_type: attachedFile?.mime_type  || null,
           file_name:      attachedFile?.filename   || null,
           search_enabled: _searchEnabled,
+          ntpu_search_enabled: _ntpuSearchEnabled,
         }),
         signal: _abortCtrl.signal,
       });
@@ -1408,25 +1579,25 @@
   // ── i18n ──
   const I18N = {
     zh: {
-      title:            "Aqulia 艾奎拉計畫",
+      title:            "NTPU AI",
       adminBtn:         "🛡️ 管理員",
       logoutBtn:        "登出",
+      logoutConfirm:    "確定要登出嗎？",
       newChatBtn:       "＋ 新對話",
       convEmpty:        "尚無對話記錄",
       welcomeH2:        "有什麼我能幫你的？",
       welcomeP:         "系統會自動判斷問題難度，路由到 Flash 或 Pro 模型",
       placeholder:      "輸入訊息… (Enter 送出，Shift+Enter 換行)",
       hint:             "AI 可能出錯，重要內容請自行驗證",
-      authTitle_login:  "登入",
-      authTitle_signup: "註冊",
-      authSub_login:    "登入後即可開始對話，紀錄將自動儲存",
-      authSub_signup:   "建立新帳號",
+      authTitle_login:  "歡迎使用 NTPU AI",
+      authSub_login:    "請使用 NTPU Google 帳號登入",
+      googleSignIn:     "使用 Google 帳號登入",
+      authDomainHint:   "僅限 @gm.ntpu.edu.tw / @ms.ntpu.edu.tw 帳號",
+      adminToggle:      "管理員入口",
+      authAdminDivider: "管理員登入",
       authEmail:        "電子郵件",
       authPass:         "密碼（至少 6 碼）",
       authSubmit_login: "登入",
-      authSubmit_signup:"註冊",
-      authSwitch_login: "還沒有帳號？ 點此註冊",
-      authSwitch_signup:"已有帳號？ 點此登入",
       authErr: {
         "auth/email-already-in-use": "此信箱已被註冊",
         "auth/invalid-email":        "信箱格式不正確",
@@ -1504,34 +1675,39 @@
       searchingWeb:     "搜尋中",
       menuFile:         "上傳檔案",
       menuSearch:       "網路搜尋",
+      menuNtpu:         "NTPU 校內搜尋",
       searchQuota:      "網路搜尋免費額度已用完",
       shareTitle:       "分享此對話",
       shareCopy:        "複製連結",
       shareCopied:      "已複製！",
       shareFail:        "分享失敗：",
       shareViewTitle:   "分享的對話",
-      shareViewBack:    "回到 Aqulia",
+      shareViewBack:    "回到 NTPU AI",
+      micTitle:         "語音輸入",
+      micStop:          "點擊停止錄音",
+      micError:         "語音辨識失敗，請再試一次",
+      micPermission:    "請允許麥克風權限後再試",
     },
     en: {
-      title:            "Aqulia Project",
+      title:            "NTPU AI",
       adminBtn:         "🛡️ Admin",
       logoutBtn:        "Logout",
+      logoutConfirm:    "Are you sure you want to sign out?",
       newChatBtn:       "＋ New Chat",
       convEmpty:        "No conversations yet",
       welcomeH2:        "How can I help you?",
       welcomeP:         "The system auto-routes your question to Flash or Pro based on complexity",
       placeholder:      "Type a message… (Enter to send, Shift+Enter for newline)",
       hint:             "AI may make mistakes. Please verify important information.",
-      authTitle_login:  "Sign In",
-      authTitle_signup: "Sign Up",
-      authSub_login:    "Sign in to start chatting. Your history is saved automatically.",
-      authSub_signup:   "Create a new account",
+      authTitle_login:  "Welcome to NTPU AI",
+      authSub_login:    "Sign in with your NTPU Google account",
+      googleSignIn:     "Sign in with Google",
+      authDomainHint:   "@gm.ntpu.edu.tw / @ms.ntpu.edu.tw accounts only",
+      adminToggle:      "Admin login",
+      authAdminDivider: "Admin login",
       authEmail:        "Email",
       authPass:         "Password (min 6 characters)",
       authSubmit_login: "Sign In",
-      authSubmit_signup:"Sign Up",
-      authSwitch_login: "No account? Sign up",
-      authSwitch_signup:"Already have an account? Sign in",
       authErr: {
         "auth/email-already-in-use": "This email is already registered",
         "auth/invalid-email":        "Invalid email format",
@@ -1609,13 +1785,18 @@
       searchingWeb:     "Searching",
       menuFile:         "Upload File",
       menuSearch:       "Web Search",
+      menuNtpu:         "NTPU Campus Search",
       searchQuota:      "Web search free quota reached",
       shareTitle:       "Share this chat",
       shareCopy:        "Copy Link",
       shareCopied:      "Copied!",
       shareFail:        "Share failed: ",
       shareViewTitle:   "Shared conversation",
-      shareViewBack:    "Back to Aqulia",
+      shareViewBack:    "Back to NTPU AI",
+      micTitle:         "Voice input",
+      micStop:          "Click to stop recording",
+      micError:         "Speech recognition failed, please try again",
+      micPermission:    "Please allow microphone access and try again",
     },
   };
 
@@ -1634,13 +1815,15 @@
     document.getElementById("input").placeholder = L.placeholder;
     document.querySelector(".hint").textContent = L.hint;
     // Auth
-    const signupMode = isSignUp;
-    document.getElementById("auth-title").textContent  = signupMode ? L.authTitle_signup : L.authTitle_login;
-    document.getElementById("auth-sub").textContent    = signupMode ? L.authSub_signup   : L.authSub_login;
-    document.getElementById("auth-submit").textContent = signupMode ? L.authSubmit_signup : L.authSubmit_login;
-    document.getElementById("auth-switch").textContent = signupMode ? L.authSwitch_signup : L.authSwitch_login;
-    document.getElementById("auth-email").placeholder = L.authEmail;
-    document.getElementById("auth-pass").placeholder  = L.authPass;
+    document.getElementById("auth-title").textContent    = L.authTitle_login;
+    document.getElementById("auth-sub").textContent      = L.authSub_login;
+    document.getElementById("google-btn-text").textContent = L.googleSignIn;
+    document.getElementById("auth-domain-hint").textContent = L.authDomainHint;
+    document.getElementById("admin-toggle-btn").textContent = L.adminToggle;
+    document.getElementById("auth-submit").textContent   = L.authSubmit_login;
+    document.getElementById("auth-divider-text").textContent = L.authAdminDivider;
+    document.getElementById("auth-email").placeholder    = L.authEmail;
+    document.getElementById("auth-pass").placeholder     = L.authPass;
     // Admin panel
     const adminBtn = document.getElementById("adminBtn");
     if (adminBtn) adminBtn.textContent = L.adminBtn;
@@ -1696,6 +1879,8 @@
     if (mfl) mfl.textContent = L.menuFile || "上傳檔案";
     const msl = document.getElementById("menu-search-label");
     if (msl) msl.textContent = L.menuSearch || "網路搜尋";
+    const mnl = document.getElementById("menu-ntpu-label");
+    if (mnl) mnl.textContent = L.menuNtpu || "NTPU 校內搜尋";
     // Settings btn
     const settingsToggle = document.getElementById("settingsBtn");
     if (settingsToggle) settingsToggle.title = L.settingsTitle;
@@ -1992,7 +2177,7 @@
   function exportConversation() {
     const messages = document.querySelectorAll("#messages .inner .msg");
     if (!messages.length) { alert(t("exportEmpty")); return; }
-    let md = `# Aqulia 對話記錄\n${new Date().toLocaleString(_lang === "zh" ? "zh-TW" : "en-US")}\n\n---\n\n`;
+    let md = `# NTPU AI 對話記錄\n${new Date().toLocaleString(_lang === "zh" ? "zh-TW" : "en-US")}\n\n---\n\n`;
     messages.forEach(msg => {
       const isUser = msg.classList.contains("user");
       const bubble = msg.querySelector(".bubble");
@@ -2080,7 +2265,7 @@
       const data = await res.json();
       const title = data.title || t("shareViewTitle");
       document.getElementById("share-view-title").textContent = title;
-      document.title = title + " — Aqulia";
+      document.title = title + " — NTPU AI";
       if (data.history?.length) {
         renderLoadedHistory(data.history);
       } else {
