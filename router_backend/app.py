@@ -5,6 +5,8 @@ import time
 import base64
 import asyncio
 import datetime
+import html as _htmllib
+import urllib.parse
 from typing import Optional
 
 import uuid
@@ -231,12 +233,32 @@ async def get_user_system_prompt(uid: str) -> str:
         return ""
 
 
-def build_system_prompt(user_sys_prompt: str) -> str:
+def build_system_prompt(user_sys_prompt: str, has_tools: bool = False) -> str:
     today = datetime.datetime.now(tz=datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d")
-    date_line = f"今天的日期是 {today}（台灣時間）。"
+    parts = [f"今天的日期是 {today}（台灣時間）。"]
+    if has_tools:
+        parts.append(
+            "你可以使用搜尋工具查詢即時或校內資訊。當使用者詢問臺北大學（NTPU）的公告、"
+            "最新消息、課程、系所、行政規定、活動、師資等校內資訊，或需要最新／即時的網路"
+            "資訊時，請呼叫對應的搜尋工具。若使用者想要「最新／近期」的北大公告，呼叫"
+            "search_ntpu_web 時把 latest 設為 true；想瀏覽全校最新消息可用 get_ntpu_news；"
+            "若搜尋摘要不足、需要某頁的完整內容，用 fetch_ntpu_page 讀取該網址全文。"
+            "呼叫工具後，只能根據工具回傳的結果回答，"
+            "不得用訓練資料編造日期、公告、活動或連結；若工具查無資料，請如實告知查不到，"
+            "並建議前往官方網站確認。與搜尋無關的一般問題（閒聊、翻譯、寫作、算式等）"
+            "直接回答即可，不需呼叫工具。回答涉及搜尋結果時請附上來源網址。"
+        )
+    else:
+        parts.append(
+            "你沒有即時上網或搜尋能力。若使用者詢問需要即時或最新資訊的問題"
+            "（例如最新公告、近期新聞、活動、股價、天氣等），請明確告訴對方"
+            "你無法查詢即時資料，並建議點選輸入框旁的「＋」開啟「網路搜尋」"
+            "或「NTPU 校內搜尋」功能後再問一次。切勿假裝已經搜尋，"
+            "也不要用訓練資料編造最新公告、日期、活動或連結。"
+        )
     if user_sys_prompt:
-        return f"{date_line}\n\n{user_sys_prompt}"
-    return date_line
+        parts.append(user_sys_prompt)
+    return "\n\n".join(parts)
 
 
 def _fs_list_sessions(uid: str) -> list:
@@ -447,7 +469,8 @@ async def build_user_content(message: str, file_gcs_path: Optional[str],
 # ------------------------------------------------------------------
 # Web search (Serper)
 # ------------------------------------------------------------------
-async def web_search(query: str, count: int = 5, ntpu_only: bool = False) -> dict:
+async def web_search(query: str, count: int = 5, ntpu_only: bool = False,
+                     sort_by_date: bool = False) -> dict:
     """Returns {"status": "ok"|"empty"|"quota"|"error", "text": str}."""
     if not TAVILY_KEY:
         return {"status": "error", "text": ""}
@@ -463,6 +486,8 @@ async def web_search(query: str, count: int = 5, ntpu_only: bool = False) -> dic
             payload["include_domains"] = ["ntpu.edu.tw"]
         else:
             payload["days"] = 30
+        if sort_by_date:
+            payload["time_range"] = "year"  # 偏向近一年，提升「最新公告」查詢的新鮮度
         async with httpx.AsyncClient() as c:
             resp = await c.post(
                 "https://api.tavily.com/search",
@@ -484,8 +509,12 @@ async def web_search(query: str, count: int = 5, ntpu_only: bool = False) -> dic
             lines = [f"（搜尋日期：{today}）"]
             if data.get("answer"):
                 lines.append(f"摘要：{data['answer']}")
+            results = data.get("results", [])
+            if sort_by_date:
+                # Tavily 預設依相似度排序；抓最新公告時改依發布日期新→舊，無日期者排最後
+                results = sorted(results, key=lambda r: r.get("published_date") or "", reverse=True)
             found = 0
-            for r in data.get("results", [])[:count]:
+            for r in results[:count]:
                 title   = r.get("title", "")
                 content = r.get("content", "")[:300]
                 url     = r.get("url", "")
@@ -502,28 +531,257 @@ async def web_search(query: str, count: int = 5, ntpu_only: bool = False) -> dic
         return {"status": "error", "text": ""}
 
 
-def _inject_search(user_content, search_ctx: str, *, has_results: bool, ntpu: bool = False):
-    scope = "臺北大學官方網站（ntpu.edu.tw）" if ntpu else "即時網路"
-    if has_results:
-        suffix = (
-            f"\n\n【{scope}搜尋結果】\n{search_ctx}\n\n"
-            f"請嚴格根據以上搜尋結果回答，只能使用搜尋結果中出現的資訊，"
-            f"不要依賴你的訓練資料。搜尋結果沒有提到的內容（包括日期、公告標題、"
-            f"活動、連結等），一律不得自行編造或推測。回答時請附上對應的來源網址。"
-            f"若搜尋結果不足以回答問題，請直接說明「搜尋結果中沒有相關資訊」。"
-        )
+# ------------------------------------------------------------------
+# Tool calling（讓 LLM 自己決定何時搜尋）
+# ------------------------------------------------------------------
+NTPU_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "search_ntpu_web",
+        "description": (
+            "搜尋國立臺北大學（NTPU）官方網站（ntpu.edu.tw）內的資訊。"
+            "當使用者詢問北大的公告、最新消息、課程、系所、行政規定、活動、"
+            "師資或校內任何事務時使用。與北大無關的一般問題不要呼叫此工具。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "搜尋關鍵字，可用中文"},
+                "latest": {
+                    "type": "boolean",
+                    "description": "使用者想要『最新／近期』的公告或消息（重視時間新舊）時設為 true，"
+                                   "會改依發布日期由新到舊排序；一般查詢維持 false。",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+WEB_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "search_web",
+        "description": (
+            "搜尋即時網路資訊。當使用者詢問需要最新或即時的一般資訊"
+            "（新聞、天氣、活動、非北大的時事等）時使用。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "搜尋關鍵字"},
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+
+FETCH_PAGE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "fetch_ntpu_page",
+        "description": (
+            "打開指定的臺北大學（ntpu.edu.tw）網頁並讀取整頁全文。當你已從搜尋結果拿到某個北大網址、"
+            "但摘要不足以回答使用者問題時，用此工具讀取該頁完整內容。只接受 ntpu.edu.tw 網域的網址。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "要讀取的臺北大學頁面完整網址（需為 ntpu.edu.tw 網域）"},
+            },
+            "required": ["url"],
+        },
+    },
+}
+
+NEWS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_ntpu_news",
+        "description": (
+            "取得臺北大學首頁的最新消息列表（全校各單位的公告、新聞、活動），依網站排序（通常最新在前）。"
+            "當使用者想瀏覽最新／近期消息，或不確定該用什麼關鍵字搜尋時使用。"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer", "description": "要回傳幾則，預設 15，最多 30"},
+            },
+        },
+    },
+}
+
+
+# ---- 北大主站抓取（httpx；主站為 Angular SSR，新聞/文章頁內容在 HTML 內） ----
+_NTPU_HOME = "https://new.ntpu.edu.tw/"
+_BROWSER_UA = "Mozilla/5.0 (compatible; NTPU-AI/1.0)"
+
+
+def _is_ntpu_url(url: str) -> bool:
+    try:
+        host = (urllib.parse.urlparse(url).hostname or "").lower()
+    except Exception:
+        return False
+    return host == "ntpu.edu.tw" or host.endswith(".ntpu.edu.tw")
+
+
+def _html_to_text(raw: str) -> str:
+    raw = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", raw)
+    raw = re.sub(r"(?s)<[^>]+>", " ", raw)
+    return re.sub(r"\s+", " ", _htmllib.unescape(raw)).strip()
+
+
+async def _fetch_ntpu(url: str) -> str:
+    if not _is_ntpu_url(url):
+        return "（只能讀取 ntpu.edu.tw 網域的頁面）"
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=20,
+                                     headers={"User-Agent": _BROWSER_UA}) as c:
+            resp = await c.get(url)
+            resp.raise_for_status()
+            raw = resp.text
+            final_url = str(resp.url)
+    except Exception:
+        return f"（無法開啟該頁面：{url}）"
+    text = _html_to_text(raw)
+    if len(text) < 40:
+        return f"（該頁面沒有可讀取的文字內容，可能需要瀏覽器才能顯示：{final_url}）"
+    m = re.search(r"發布日期[：: ]*([0-9]{4}\s*/\s*[0-9]{1,2}\s*/\s*[0-9]{1,2})", raw)
+    head = f"來源：{final_url}\n"
+    if m:
+        clean_date = re.sub(r"\s+", "", m.group(1))
+        head += f"發布日期：{clean_date}\n"
+    return head + "\n" + text[:6000]
+
+
+async def _ntpu_latest_news(count: int = 15) -> str:
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=20,
+                                     headers={"User-Agent": _BROWSER_UA}) as c:
+            resp = await c.get(_NTPU_HOME)
+            resp.raise_for_status()
+            raw = resp.text
+    except Exception:
+        return "（無法取得臺北大學最新消息）"
+    anchors = re.findall(r'<a[^>]+href="([^"]*?/news/[^"]+)"[^>]*>(.*?)</a>', raw, re.S | re.I)
+    seen: set = set()
+    items: list = []
+    for href, inner in anchors:
+        parts = [p for p in urllib.parse.urlparse(href).path.split("/") if p]
+        if len(parts) < 2:
+            continue
+        nid = parts[1]
+        if nid in seen or nid == "news":
+            continue
+        title_from_url = urllib.parse.unquote(parts[-1]) if len(parts) >= 3 else ""
+        inner_text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", inner)).strip()
+        title = inner_text or title_from_url
+        if not title or title.startswith("SYSTEM."):
+            continue
+        seen.add(nid)
+        full = href if href.startswith("http") else "https://new.ntpu.edu.tw/" + href.lstrip("/")
+        items.append(f"• {title}\n  {full}")
+        if len(items) >= count:
+            break
+    if not items:
+        return "（目前抓不到最新消息列表）"
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    return (f"（臺北大學首頁最新消息，擷取日期 {today}，依網站排序，通常最新在前）\n\n"
+            + "\n".join(items))
+
+
+def _build_search_tools(req: "ChatRequest") -> list:
+    tools = []
+    if req.ntpu_search_enabled:
+        tools += [NTPU_SEARCH_TOOL, FETCH_PAGE_TOOL, NEWS_TOOL]
+    if req.search_enabled:
+        tools.append(WEB_SEARCH_TOOL)
+    return tools
+
+
+async def _run_search_tool(name: str, args: dict) -> str:
+    if name == "fetch_ntpu_page":
+        return await _fetch_ntpu((args.get("url") or "").strip())
+    if name == "get_ntpu_news":
+        try:
+            n = int(args.get("count") or 15)
+        except Exception:
+            n = 15
+        return await _ntpu_latest_news(max(1, min(30, n)))
+    query = (args.get("query") or "").strip()
+    if not query:
+        return "（未提供搜尋關鍵字）"
+    if name == "search_ntpu_web":
+        sr = await web_search(query, count=8, ntpu_only=True, sort_by_date=bool(args.get("latest")))
+        scope = "臺北大學官網"
+    elif name == "search_web":
+        sr = await web_search(query, count=5)
+        scope = "網路"
     else:
-        suffix = (
-            f"\n\n【{scope}搜尋結果：查無相關資料】\n"
-            f"本次搜尋沒有找到任何符合的結果。請明確告訴使用者「在{scope}上查不到相關資料」，"
-            f"並建議對方確認關鍵字或直接前往官方網站查詢。"
-            f"絕對不要用你的訓練資料編造答案、日期、公告內容、活動或連結。"
+        return "（未知的工具）"
+    if sr["status"] == "ok":
+        return sr["text"]
+    if sr["status"] == "quota":
+        return f"（{scope}搜尋額度已用盡，暫時無法查詢，請稍後再試）"
+    return f"（在{scope}查無「{query}」的相關資料）"
+
+
+async def run_tools(client: httpx.AsyncClient, model_alias: str, messages: list,
+                    tools: list, max_tokens: int = 65536, max_iters: int = 5):
+    """驅動 tool-calling 迴圈。
+
+    以 async generator 形式產出事件：
+      {"type": "tool_running", "name": <工具名>}  — 某個工具即將執行
+      {"type": "final", "content": <答案>, "usage": {...}}  — 最終回覆（usage 為各回合累加）
+    """
+    total_in = total_out = 0
+    for _ in range(max_iters):
+        resp = await client.post(
+            f"{LITELLM_BASE_URL}/v1/chat/completions",
+            headers={"Authorization": f"Bearer {LITELLM_API_KEY}"},
+            json={"model": model_alias, "messages": messages,
+                  "max_tokens": max_tokens, "tools": tools},
+            timeout=120,
         )
-    if isinstance(user_content, str):
-        return user_content + suffix
-    parts = list(user_content)
-    parts[0] = {"type": "text", "text": parts[0]["text"] + suffix}
-    return parts
+        resp.raise_for_status()
+        data = resp.json()
+        msg = data["choices"][0]["message"]
+        usage = data.get("usage", {})
+        total_in  += usage.get("prompt_tokens", 0)
+        total_out += usage.get("completion_tokens", 0)
+
+        if msg.get("tool_calls"):
+            messages.append(msg)
+            for tc in msg["tool_calls"]:
+                fn = tc.get("function", {})
+                yield {"type": "tool_running", "name": fn.get("name", "")}
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except Exception:
+                    args = {}
+                try:
+                    result = await _run_search_tool(fn.get("name", ""), args)
+                except Exception:
+                    result = "（工具呼叫失敗，請稍後再試）"
+                messages.append({"role": "tool", "tool_call_id": tc.get("id"), "content": result})
+            continue
+
+        content = msg.get("content")
+        if content is None:
+            content = msg.get("reasoning_content") or ""
+        yield {"type": "final", "content": content,
+               "usage": {"input_tokens": total_in, "output_tokens": total_out}}
+        return
+
+    yield {"type": "final",
+           "content": "（搜尋工具呼叫次數過多，請換個方式再問一次）",
+           "usage": {"input_tokens": total_in, "output_tokens": total_out}}
+
+
+def _chunk_text(text: str, size: int = 24):
+    for i in range(0, len(text), size):
+        yield text[i:i + size]
 
 
 # ------------------------------------------------------------------
@@ -627,19 +885,20 @@ async def chat(req: ChatRequest, authorization: Optional[str] = Header(None)):
         judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})
         sys_prompt = await get_user_system_prompt(uid)
         user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
-        if (req.search_enabled or req.ntpu_search_enabled) and TAVILY_KEY:
-            sr = await web_search(req.message, ntpu_only=req.ntpu_search_enabled)
-            if sr["status"] == "ok":
-                user_content = _inject_search(user_content, sr["text"],
-                                              has_results=True, ntpu=req.ntpu_search_enabled)
-            elif sr["status"] == "empty":
-                user_content = _inject_search(user_content, "",
-                                              has_results=False, ntpu=req.ntpu_search_enabled)
-            # quota / error：不注入，維持原行為
-        answer_messages = [{"role": "system", "content": build_system_prompt(sys_prompt)}]
+        tools = _build_search_tools(req) if TAVILY_KEY else []
+        # 工具啟用時避免路由到不支援 function calling 的開源小模型
+        if tools and route == "tiny":
+            route, model_alias = "small", SMALL_MODEL_ALIAS
+        answer_messages = [{"role": "system", "content": build_system_prompt(sys_prompt, has_tools=bool(tools))}]
         answer_messages += llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
         t1 = time.time()
-        answer, answer_usage = await call_litellm(client, model_alias, answer_messages)
+        if tools:
+            answer, answer_usage = "", {"input_tokens": 0, "output_tokens": 0}
+            async for ev in run_tools(client, model_alias, answer_messages, tools):
+                if ev["type"] == "final":
+                    answer, answer_usage = ev["content"], ev["usage"]
+        else:
+            answer, answer_usage = await call_litellm(client, model_alias, answer_messages)
         answer_elapsed_ms = int((time.time() - t1) * 1000)
 
     total_input  = judge_usage["input_tokens"]  + answer_usage["input_tokens"]
@@ -710,62 +969,67 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
                     "large": LARGE_MODEL_ALIAS,
                 }[route]
 
+                tools = _build_search_tools(req) if TAVILY_KEY else []
+                # 工具啟用時避免路由到不支援 function calling 的開源小模型
+                if tools and route == "tiny":
+                    route, model_alias = "small", SMALL_MODEL_ALIAS
+
                 # 3. 先送 judge metadata（順便取出 usage，不傳給前端）
                 judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})
                 yield f"data: {json.dumps({'type':'judge','route':route,'model':model_alias,'judge':judge,'judge_elapsed_ms':judge_elapsed_ms})}\n\n"
 
-                # 4. 準備訊息（含系統提示 + 網路搜尋）
+                # 4. 準備訊息（系統提示；搜尋改由 LLM 透過工具自行觸發）
                 sys_prompt = await get_user_system_prompt(uid)
                 user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
-                if (req.search_enabled or req.ntpu_search_enabled) and TAVILY_KEY:
-                    yield f"data: {json.dumps({'type':'search'})}\n\n"
-                    sr = await web_search(req.message, ntpu_only=req.ntpu_search_enabled)
-                    if sr["status"] == "quota":
-                        yield f"data: {json.dumps({'type':'search_quota'})}\n\n"
-                    elif sr["status"] == "ok":
-                        user_content = _inject_search(user_content, sr["text"],
-                                                      has_results=True, ntpu=req.ntpu_search_enabled)
-                    elif sr["status"] == "empty":
-                        user_content = _inject_search(user_content, "",
-                                                      has_results=False, ntpu=req.ntpu_search_enabled)
-                    # error：不注入，維持原行為
-                answer_messages = [{"role": "system", "content": build_system_prompt(sys_prompt)}]
+                answer_messages = [{"role": "system", "content": build_system_prompt(sys_prompt, has_tools=bool(tools))}]
                 answer_messages += llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
                 t1 = time.time()
                 full_content = ""
                 answer_input_tokens  = 0
                 answer_output_tokens = 0
 
-                async with client.stream(
-                    "POST",
-                    f"{LITELLM_BASE_URL}/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {LITELLM_API_KEY}"},
-                    json={"model": model_alias, "messages": answer_messages, "max_tokens": 65536,
-                          "stream": True, "stream_options": {"include_usage": True}},
-                    timeout=httpx.Timeout(connect=30, read=300, write=30, pool=10),
-                ) as resp:
-                    resp.raise_for_status()
-                    async for line in resp.aiter_lines():
-                        if not line.startswith("data: "):
-                            continue
-                        raw = line[6:].strip()
-                        if raw == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(raw)
-                            # 最後一個 chunk 含 usage
-                            if chunk.get("usage"):
-                                u = chunk["usage"]
-                                answer_input_tokens  = u.get("prompt_tokens", 0)
-                                answer_output_tokens = u.get("completion_tokens", 0)
-                            if chunk.get("choices"):
-                                delta = chunk["choices"][0].get("delta", {})
-                                content = delta.get("content") or delta.get("reasoning_content") or ""
-                                if content:
-                                    full_content += content
-                                    yield f"data: {json.dumps({'type':'token','content':content})}\n\n"
-                        except Exception:
-                            pass
+                if tools:
+                    # 工具路徑：先讓模型決定是否呼叫搜尋，解析完再把最終答案逐段送出
+                    async for ev in run_tools(client, model_alias, answer_messages, tools):
+                        if ev["type"] == "tool_running":
+                            yield f"data: {json.dumps({'type':'search'})}\n\n"
+                        elif ev["type"] == "final":
+                            full_content = ev["content"]
+                            answer_input_tokens  = ev["usage"]["input_tokens"]
+                            answer_output_tokens = ev["usage"]["output_tokens"]
+                    for piece in _chunk_text(full_content):
+                        yield f"data: {json.dumps({'type':'token','content':piece})}\n\n"
+                else:
+                    async with client.stream(
+                        "POST",
+                        f"{LITELLM_BASE_URL}/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {LITELLM_API_KEY}"},
+                        json={"model": model_alias, "messages": answer_messages, "max_tokens": 65536,
+                              "stream": True, "stream_options": {"include_usage": True}},
+                        timeout=httpx.Timeout(connect=30, read=300, write=30, pool=10),
+                    ) as resp:
+                        resp.raise_for_status()
+                        async for line in resp.aiter_lines():
+                            if not line.startswith("data: "):
+                                continue
+                            raw = line[6:].strip()
+                            if raw == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(raw)
+                                # 最後一個 chunk 含 usage
+                                if chunk.get("usage"):
+                                    u = chunk["usage"]
+                                    answer_input_tokens  = u.get("prompt_tokens", 0)
+                                    answer_output_tokens = u.get("completion_tokens", 0)
+                                if chunk.get("choices"):
+                                    delta = chunk["choices"][0].get("delta", {})
+                                    content = delta.get("content") or delta.get("reasoning_content") or ""
+                                    if content:
+                                        full_content += content
+                                        yield f"data: {json.dumps({'type':'token','content':content})}\n\n"
+                            except Exception:
+                                pass
 
                 answer_elapsed_ms = int((time.time() - t1) * 1000)
                 total_input  = judge_usage["input_tokens"]  + answer_input_tokens
