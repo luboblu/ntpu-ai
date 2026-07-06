@@ -13,7 +13,9 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
   router-backend:
-    build: ./router_backend
+    build:
+      context: .                                  # repo 根目錄，才含 frontend/index.html
+      dockerfile: router_backend/Dockerfile
     depends_on:
       - litellm
     ports:
@@ -25,3 +27,10 @@ services:
       - SMALL_MODEL_ALIASES=cloud-small-claude,cloud-small-gemini
       - MEDIUM_MODEL_ALIASES=cloud-medium-claude,cloud-medium-gemini
       - LARGE_MODEL_ALIASES=cloud-large-claude,cloud-large-gemini
+      # 以下為選填；未設定時後端會降級（無 Firebase → 匿名、無金鑰 → 停用對應功能）
+      - TINY_MODEL_ALIAS=${TINY_MODEL_ALIAS:-}
+      - GCS_BUCKET=${GCS_BUCKET:-ntpu-ai-uploads}
+      - FIREBASE_SERVICE_ACCOUNT_B64=${FIREBASE_SERVICE_ACCOUNT_B64:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
