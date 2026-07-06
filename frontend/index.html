@@ -99,13 +99,6 @@
   .auth-btn.primary:hover { background: #6d2fd4; }
   .auth-btn.secondary { background: var(--bg3); color: var(--text3); border: 1px solid var(--border3); }
   .auth-btn.secondary:hover { filter: brightness(0.95); }
-  .admin-toggle {
-    font-size: 12px; color: var(--text5); background: none; border: none;
-    cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
-    display: block; margin: 0 auto;
-  }
-  .admin-toggle:hover { color: var(--text3); }
-  #admin-login-section { display: none; margin-top: 4px; }
 
   /* ── Sidebar ── */
   .sidebar {
@@ -684,15 +677,6 @@
     </button>
     <p class="google-btn-sub" id="auth-domain-hint">僅限 @gm.ntpu.edu.tw 帳號</p>
     <div class="auth-err" id="auth-err"></div>
-    <!-- Admin email/password fallback -->
-    <div id="admin-login-section">
-      <div class="auth-divider" id="auth-divider-text">管理員登入</div>
-      <input class="auth-input" id="auth-email" type="email" placeholder="電子郵件" autocomplete="email" />
-      <input class="auth-input" id="auth-pass"  type="password" placeholder="密碼（至少 6 碼）" autocomplete="current-password" />
-      <button class="auth-btn primary" id="auth-submit">登入</button>
-      <button class="auth-btn secondary" id="auth-signup-btn" style="font-size:13px">還沒有帳號？ 點此註冊</button>
-    </div>
-    <button class="admin-toggle" id="admin-toggle-btn">管理員入口</button>
   </div>
 </div>
 
@@ -917,32 +901,6 @@
     }
   };
 
-  // Admin email/password fallback
-  let _adminSectionOpen = false;
-  document.getElementById("admin-toggle-btn").onclick = () => {
-    _adminSectionOpen = !_adminSectionOpen;
-    document.getElementById("admin-login-section").style.display = _adminSectionOpen ? "block" : "none";
-  };
-  async function _adminAuth(isSignUp) {
-    const email = document.getElementById("auth-email").value.trim();
-    const pass  = document.getElementById("auth-pass").value;
-    const errEl = document.getElementById("auth-err");
-    errEl.textContent = "";
-    try {
-      if (isSignUp) await auth.createUserWithEmailAndPassword(email, pass);
-      else          await auth.signInWithEmailAndPassword(email, pass);
-    } catch (e) {
-      const MAP = t("authErr");
-      errEl.textContent = MAP[e.code] || e.message;
-    }
-  }
-  document.getElementById("auth-submit").onclick = () => _adminAuth(false);
-  document.getElementById("auth-signup-btn").onclick = () => _adminAuth(true);
-  ["auth-email","auth-pass"].forEach(id =>
-    document.getElementById(id).addEventListener("keydown", e => {
-      if (e.key === "Enter") _adminAuth(false);
-    })
-  );
   document.getElementById("logoutBtn").onclick = () => {
     if (confirm(t("logoutConfirm"))) auth.signOut();
   };
@@ -1925,11 +1883,6 @@
     document.getElementById("auth-sub").textContent      = L.authSub_login;
     document.getElementById("google-btn-text").textContent = L.googleSignIn;
     document.getElementById("auth-domain-hint").textContent = L.authDomainHint;
-    document.getElementById("admin-toggle-btn").textContent = L.adminToggle;
-    document.getElementById("auth-submit").textContent   = L.authSubmit_login;
-    document.getElementById("auth-divider-text").textContent = L.authAdminDivider;
-    document.getElementById("auth-email").placeholder    = L.authEmail;
-    document.getElementById("auth-pass").placeholder     = L.authPass;
     // Admin panel
     const adminBtn = document.getElementById("adminBtn");
     if (adminBtn) adminBtn.textContent = L.adminBtn;

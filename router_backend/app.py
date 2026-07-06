@@ -139,8 +139,9 @@ async def decode_token(authorization: Optional[str]) -> dict:
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid auth token")
 
-    sign_in_provider = decoded.get("firebase", {}).get("sign_in_provider", "")
-    if sign_in_provider == "google.com" and not decoded.get("admin"):
+    # 網域限制套用到所有非管理員，不分登入方式（google / password 一視同仁），
+    # 避免有人用 email/password 自行註冊任意信箱繞過「僅限 NTPU 帳號」的限制。
+    if not decoded.get("admin"):
         email = decoded.get("email", "")
         domain = email.split("@")[-1] if "@" in email else ""
         if domain not in ALLOWED_DOMAINS:
