@@ -22,9 +22,12 @@ from pydantic import BaseModel
 # ------------------------------------------------------------------
 LITELLM_BASE_URL  = os.environ.get("LITELLM_BASE_URL", "http://localhost:4000")
 LITELLM_API_KEY   = os.environ.get("LITELLM_MASTER_KEY", "sk-1234")
-SMALL_MODEL_ALIAS = os.environ.get("SMALL_MODEL_ALIAS", "cloud-small")
-MEDIUM_MODEL_ALIAS = os.environ.get("MEDIUM_MODEL_ALIAS", "cloud-medium")
-LARGE_MODEL_ALIAS = os.environ.get("LARGE_MODEL_ALIAS", "cloud-large")
+SMALL_MODEL_ALIAS = os.environ.get("SMALL_MODEL_ALIAS", "cloud-small-claude")
+MEDIUM_MODEL_ALIAS = os.environ.get("MEDIUM_MODEL_ALIAS", "cloud-medium-claude")
+LARGE_MODEL_ALIAS = os.environ.get("LARGE_MODEL_ALIAS", "cloud-large-claude")
+SMALL_MODEL_ALIASES = os.environ.get("SMALL_MODEL_ALIASES", f"{SMALL_MODEL_ALIAS},cloud-small-gemini")
+MEDIUM_MODEL_ALIASES = os.environ.get("MEDIUM_MODEL_ALIASES", f"{MEDIUM_MODEL_ALIAS},cloud-medium-gemini")
+LARGE_MODEL_ALIASES = os.environ.get("LARGE_MODEL_ALIASES", f"{LARGE_MODEL_ALIAS},cloud-large-gemini")
 JUDGE_MODEL_ALIAS = os.environ.get("JUDGE_MODEL_ALIAS", "judge-model")
 TINY_MODEL_ALIAS  = os.environ.get("TINY_MODEL_ALIAS", "")  # 開源小模型，選填
 HISTORY_LIMIT     = 10
@@ -33,6 +36,28 @@ UPLOAD_MAX_BYTES  = 20 * 1024 * 1024  # 20 MB
 TAVILY_KEY        = os.environ.get("TAVILY_API_KEY", "")
 OPENAI_API_KEY    = os.environ.get("OPENAI_API_KEY", "")
 MAX_ANSWER_TOKENS = 64000
+
+
+def _alias_list(raw: str) -> list[str]:
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+
+MODEL_CANDIDATES = {
+    "small": _alias_list(SMALL_MODEL_ALIASES),
+    "medium": _alias_list(MEDIUM_MODEL_ALIASES),
+    "large": _alias_list(LARGE_MODEL_ALIASES),
+}
+if TINY_MODEL_ALIAS:
+    MODEL_CANDIDATES["tiny"] = [TINY_MODEL_ALIAS]
+
+MODEL_NOTES = {
+    "cloud-small-claude": "Claude Haiku 4.5：快速、省成本，適合簡單問答與短任務",
+    "cloud-small-gemini": "Gemini 3.1 Flash-Lite：最快速、成本低，適合大量輕量任務",
+    "cloud-medium-claude": "Claude Sonnet 5：品質穩定，適合一般推理、寫作與程式任務",
+    "cloud-medium-gemini": "Gemini 3.5 Flash：低延遲且能力均衡，適合中等複雜任務",
+    "cloud-large-claude": "Claude Opus 4.8：高品質深度推理、長任務與複雜 coding",
+    "cloud-large-gemini": "Gemini 2.5 Pro：深度推理與 coding，適合複雜任務",
+}
 
 
 # ------------------------------------------------------------------
@@ -162,29 +187,54 @@ async def get_routing_config() -> dict:
     return _routing_cache
 
 
-def _select_route(config: dict, score: float, force: Optional[str]) -> tuple[str, str]:
+def _route_from_score(config: dict, score: float) -> str:
+    t_tiny = config.get("threshold_tiny")
+    t_medium = float(config.get("threshold_medium") or 4.0)
+    t_large = float(config.get("threshold_large") or 7.0)
+
+    if t_tiny is not None and score < float(t_tiny):
+        return "tiny"
+    if score >= t_large:
+        return "large"
+    if score >= t_medium:
+        return "medium"
+    return "small"
+
+
+def _default_model_for_route(route: str) -> str:
+    candidates = MODEL_CANDIDATES.get(route) or MODEL_CANDIDATES["small"]
+    return candidates[0]
+
+
+def _model_options_text() -> str:
+    lines = []
+    for route in ("small", "medium", "large"):
+        candidates = MODEL_CANDIDATES.get(route, [])
+        if candidates:
+            lines.append(f"{route}:")
+            for alias in candidates:
+                lines.append(f"- {alias}: {MODEL_NOTES.get(alias, '可用回答模型')}")
+    if MODEL_CANDIDATES.get("tiny"):
+        lines.append("tiny:")
+        for alias in MODEL_CANDIDATES["tiny"]:
+            lines.append(f"- {alias}: 開源或自訂小模型；僅在低風險、低複雜度且不需工具時使用")
+    return "\n".join(lines)
+
+
+def _select_route(config: dict, judge: dict, force: Optional[str]) -> tuple[str, str]:
+    score = float(judge.get("score", 5.0))
+    requested_route = judge.get("route")
+    requested_model = judge.get("model")
+
     if force in ("small", "medium", "large", "tiny"):
         route = force
+    elif requested_route in MODEL_CANDIDATES:
+        route = requested_route
     else:
-        t_tiny = config.get("threshold_tiny")
-        t_medium = float(config.get("threshold_medium") or 4.0)
-        t_large = float(config.get("threshold_large") or 7.0)
+        route = _route_from_score(config, score)
 
-        if t_tiny is not None and score < float(t_tiny):
-            route = "tiny"
-        elif score >= t_large:
-            route = "large"
-        elif score >= t_medium:
-            route = "medium"
-        else:
-            route = "small"
-
-    model_alias = {
-        "tiny": TINY_MODEL_ALIAS or SMALL_MODEL_ALIAS,
-        "small": SMALL_MODEL_ALIAS,
-        "medium": MEDIUM_MODEL_ALIAS,
-        "large": LARGE_MODEL_ALIAS,
-    }[route]
+    candidates = MODEL_CANDIDATES.get(route) or MODEL_CANDIDATES["small"]
+    model_alias = requested_model if requested_model in candidates else candidates[0]
     return route, model_alias
 
 
@@ -821,21 +871,28 @@ def _chunk_text(text: str, size: int = 24):
 # ------------------------------------------------------------------
 # Judge
 # ------------------------------------------------------------------
-JUDGE_SYSTEM_PROMPT = """你是一個路由決策模型，專門負責評估使用者訊息的任務難度，決定要交給小模型、中模型或大模型處理。
+JUDGE_SYSTEM_PROMPT = """你是一個路由決策模型，專門負責評估使用者訊息的任務難度，決定要交給哪個級距與哪個回答模型處理。
 
-你的唯一工作是輸出難度分數，不要回答使用者的問題。
+你的唯一工作是輸出路由 JSON，不要回答使用者的問題。
 
 評分標準（0–10）：
 - 0–3：閒聊、問候、簡單查詢、是非題、單一事實查詢
 - 4–6：需要解釋概念、簡單摘要、基本程式碼片段、一般性建議
 - 7–10：多步驟推理、複雜程式實作、數學證明、需要深度分析或跨領域整合的任務
 
+級距選擇：
+- small：0–3 分，低成本快速回答
+- medium：4–6 分，品質與速度平衡
+- large：7–10 分，深度推理、複雜 coding、長任務
+
 注意事項：
 - 若訊息本身簡短，但對話脈絡顯示是複雜任務的延伸（如「幫我改一下」接在程式碼討論後），請評估整個任務的難度
 - 評分要保守：寧可低估讓較小模型先試，也不要動輒給高分浪費大模型
+- model 必須從使用者訊息提供的「可選模型」清單中挑選，不得自創模型名稱
+- 若同級距有多個模型，依任務特性挑選：Claude 偏向穩定寫作、深度 coding、長對話；Gemini 偏向低延遲、多模態、Google 生態與高吞吐
 
 輸出格式（嚴格遵守，不得有多餘文字）：
-{"score": 數字, "reason": "一句話說明"}"""
+{"score": 數字, "route": "small|medium|large", "model": "模型 alias", "reason": "一句話說明"}"""
 
 
 async def model_classify(client: httpx.AsyncClient, text: str, history: list) -> dict:
@@ -846,7 +903,7 @@ async def model_classify(client: httpx.AsyncClient, text: str, history: list) ->
         context_block = ""
     messages = [
         {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-        {"role": "user", "content": f"{context_block}請評估以下最新訊息的難度：\n```\n{text}\n```"},
+        {"role": "user", "content": f"{context_block}可選模型：\n{_model_options_text()}\n\n請評估以下最新訊息的難度並選擇級距與模型：\n```\n{text}\n```"},
     ]
     raw, judge_usage = await call_litellm(client, JUDGE_MODEL_ALIAS, messages, max_tokens=1024)
     # 先嘗試直接解析，再用 regex 從回應中抓出 {...}
@@ -866,11 +923,24 @@ async def model_classify(client: httpx.AsyncClient, text: str, history: list) ->
                 pass
     if parsed:
         score = max(0.0, min(10.0, float(parsed.get("score", 5))))
-        return {"score": score, "reason": parsed.get("reason", ""), "normalized": score / 10.0, "_usage": judge_usage}
+        route = parsed.get("route")
+        model = parsed.get("model")
+        if route not in MODEL_CANDIDATES:
+            route = None
+        if route and model not in MODEL_CANDIDATES.get(route, []):
+            model = None
+        return {
+            "score": score,
+            "route": route,
+            "model": model,
+            "reason": parsed.get("reason", ""),
+            "normalized": score / 10.0,
+            "_usage": judge_usage,
+        }
     # 解析失敗：記錄 raw 幫助偵錯
     import logging
     logging.warning(f"[judge] parse failed, raw={raw[:300]!r}")
-    return {"score": 5.0, "reason": "", "normalized": 0.5, "_usage": judge_usage}
+    return {"score": 5.0, "route": None, "model": None, "reason": "", "normalized": 0.5, "_usage": judge_usage}
 
 
 # ------------------------------------------------------------------
@@ -898,7 +968,9 @@ async def chat(req: ChatRequest, authorization: Optional[str] = Header(None)):
 
         # force_model 只對管理員帳號生效，一般使用者維持正常路由
         force = config.get("force_model") if decoded.get("admin") else None
-        route, model_alias = _select_route(config, judge["score"], force)
+        route, model_alias = _select_route(config, judge, force)
+        judge["route"] = route
+        judge["model"] = model_alias
 
         judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})
         sys_prompt = await get_user_system_prompt(uid)
@@ -906,7 +978,7 @@ async def chat(req: ChatRequest, authorization: Optional[str] = Header(None)):
         tools = _build_search_tools(req) if TAVILY_KEY else []
         # 工具啟用時避免路由到不支援 function calling 的開源小模型
         if tools and route == "tiny":
-            route, model_alias = "small", SMALL_MODEL_ALIAS
+            route, model_alias = "small", _default_model_for_route("small")
         answer_messages = [{"role": "system", "content": build_system_prompt(sys_prompt, has_tools=bool(tools))}]
         answer_messages += llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
         t1 = time.time()
@@ -969,12 +1041,14 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
 
                 # 2. 路由
                 force = config.get("force_model") if decoded.get("admin") else None
-                route, model_alias = _select_route(config, judge["score"], force)
+                route, model_alias = _select_route(config, judge, force)
+                judge["route"] = route
+                judge["model"] = model_alias
 
                 tools = _build_search_tools(req) if TAVILY_KEY else []
                 # 工具啟用時避免路由到不支援 function calling 的開源小模型
                 if tools and route == "tiny":
-                    route, model_alias = "small", SMALL_MODEL_ALIAS
+                    route, model_alias = "small", _default_model_for_route("small")
 
                 # 3. 先送 judge metadata（順便取出 usage，不傳給前端）
                 judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})

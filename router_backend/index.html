@@ -1285,6 +1285,7 @@
         </div>
         <div class="judge-panel" id="${id}">
           ${t("judgeScore")} <b>${data.judge.score.toFixed(1)}</b> / 10<br>
+          ${data.model ? `${t("judgeModel")} <b>${data.model}</b><br>` : ""}
           ${data.judge.reason || t("judgeNoReason")}
         </div>`;
     }
@@ -1335,7 +1336,9 @@
       <button class="judge-toggle" onclick="document.getElementById('${id}').classList.toggle('open')">${t("judgeToggle")}</button>
     </div>
     <div class="judge-panel" id="${id}">
-      ${t("judgeScore")} <b>${judgeEvt.judge.score.toFixed(1)}</b> / 10<br>${judgeEvt.judge.reason || t("judgeNoReason")}
+      ${t("judgeScore")} <b>${judgeEvt.judge.score.toFixed(1)}</b> / 10<br>
+      ${judgeEvt.model ? `${t("judgeModel")} <b>${judgeEvt.model}</b><br>` : ""}
+      ${judgeEvt.judge.reason || t("judgeNoReason")}
     </div>`;
   }
 
@@ -1666,6 +1669,7 @@
       badgeTiny:        "開源模型",
       judgeToggle:      "難度分析 ▾",
       judgeScore:       "本次評分",
+      judgeModel:       "使用模型",
       judgeNoReason:    "（無說明）",
       fileUploading:    "上傳中…",
       filePreviewExt:   "檔案",
@@ -1780,6 +1784,7 @@
       badgeTiny:        "Open-source",
       judgeToggle:      "Difficulty ▾",
       judgeScore:       "Score",
+      judgeModel:       "Model",
       judgeNoReason:    "(no explanation)",
       fileUploading:    "Uploading…",
       filePreviewExt:   "file",
