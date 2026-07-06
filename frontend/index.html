@@ -458,6 +458,16 @@
   .a-table tr:hover td { background: var(--table-hover-bg); }
   .a-notice { font-size: 13px; color: var(--text4); text-align: center; padding: 32px; }
 
+  /* Admin: stats range selector */
+  .stats-range-bar { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .stats-range-btn {
+    font-size: 12px; padding: 6px 14px; border-radius: 999px;
+    border: 1px solid var(--border3); background: var(--bg2); color: var(--text3);
+    cursor: pointer; transition: all .15s;
+  }
+  .stats-range-btn:hover { background: var(--sidebar-hover); color: var(--text2); }
+  .stats-range-btn.active { background: #7c3aed; color: #fff; border-color: #7c3aed; }
+
   /* Admin: config */
   .cfg-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--cfg-border); }
   .cfg-row:last-child { border-bottom: none; }
@@ -704,6 +714,12 @@
 
       <!-- Stats tab -->
       <div id="pane-stats" class="tab-pane">
+        <div class="stats-range-bar" id="stats-range-bar">
+          <button class="stats-range-btn" data-range="today">今天</button>
+          <button class="stats-range-btn" data-range="yesterday">昨天</button>
+          <button class="stats-range-btn" data-range="7d">近 7 天</button>
+          <button class="stats-range-btn active" data-range="30d">近 30 天</button>
+        </div>
         <div id="stats-content"><div class="a-notice">載入中…</div></div>
       </div>
 
@@ -1669,11 +1685,15 @@
       cfgForceTiny:     "強制開源小模型",
       saveBtn:          "儲存設定",
       cfgSaved:         "✓ 設定已儲存，約 30 秒後生效",
-      statsRange:       "統計範圍：近 30 天（含 judge 模型消耗）",
-      statsEmpty:       "近 30 天尚無使用記錄",
+      statsRange:       "Token 量含 judge 模型消耗，可用於估算成本",
+      statsEmpty:       "此區間尚無使用記錄",
       statsLoading:     "載入中…",
-      statsCols:        ["使用者","次數","小模型","中模型","大模型","輸入 Token","輸出 Token","總 Token"],
+      statsCols:        ["使用者","對話數","次數","小模型","中模型","大模型","輸入 Token","輸出 Token","總 Token"],
       statsTotal:       "合計",
+      statsRangeToday:     "今天",
+      statsRangeYesterday: "昨天",
+      statsRange7d:        "近 7 天",
+      statsRange30d:       "近 30 天",
       usersEmpty:       "無使用者",
       usersSelf:        "(你)",
       usersAdminBadge:  "管理員",
@@ -1794,11 +1814,15 @@
       cfgForceTiny:     "Force open-source model",
       saveBtn:          "Save Settings",
       cfgSaved:         "✓ Settings saved. Takes effect in ~30 seconds.",
-      statsRange:       "Last 30 days (includes judge model usage)",
-      statsEmpty:       "No usage in the last 30 days",
+      statsRange:       "Token counts include judge model usage — use for cost estimation",
+      statsEmpty:       "No usage in this range",
       statsLoading:     "Loading…",
-      statsCols:        ["User","Requests","Small","Medium","Large","Input Tokens","Output Tokens","Total Tokens"],
+      statsCols:        ["User","Chats","Requests","Small","Medium","Large","Input Tokens","Output Tokens","Total Tokens"],
       statsTotal:       "Total",
+      statsRangeToday:     "Today",
+      statsRangeYesterday: "Yesterday",
+      statsRange7d:        "Last 7 days",
+      statsRange30d:       "Last 30 days",
       usersEmpty:       "No users",
       usersSelf:        "(you)",
       usersAdminBadge:  "Admin",
@@ -1893,6 +1917,11 @@
       tabBtns[1].textContent = L.tabConfig;
       tabBtns[2].textContent = L.tabUsers;
     }
+    // Stats range selector buttons
+    const _rangeLabels = { today: L.statsRangeToday, yesterday: L.statsRangeYesterday, "7d": L.statsRange7d, "30d": L.statsRange30d };
+    document.querySelectorAll(".stats-range-btn").forEach(b => {
+      if (_rangeLabels[b.dataset.range]) b.textContent = _rangeLabels[b.dataset.range];
+    });
     document.querySelector(".no-admin-box h3").textContent = L.noAdminH3;
     document.querySelector(".no-admin-box p").innerHTML = L.noAdminP.replace("\n","<br>");
     document.getElementById("becomeAdminBtn").textContent = L.becomeAdmin;
@@ -2029,12 +2058,40 @@
   }
 
   // ── Stats ──
+  // 目前選取的統計區間；預設「近 30 天」
+  let _statsRange = "30d";
+
+  // 依選取的區間算出 [start, end)（用台灣本地時間界定「今天／昨天」，再轉成 ISO/UTC 送後端）
+  function _statsRangeBounds() {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let start, end;
+    switch (_statsRange) {
+      case "today":     start = startOfToday; end = now; break;
+      case "yesterday": start = new Date(startOfToday.getTime() - 86400000); end = startOfToday; break;
+      case "7d":        start = new Date(now.getTime() - 7 * 86400000); end = now; break;
+      default:          start = new Date(now.getTime() - 30 * 86400000); end = now; // 30d
+    }
+    return { start: start.toISOString(), end: end.toISOString() };
+  }
+
+  // 綁定區間按鈕（面板為靜態 DOM，只需綁一次）
+  document.querySelectorAll(".stats-range-btn").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".stats-range-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      _statsRange = btn.dataset.range;
+      loadStats();
+    };
+  });
+
   async function loadStats() {
     const el = document.getElementById("stats-content");
     el.innerHTML = `<div class="a-notice">${t("statsLoading")}</div>`;
     try {
       const token = await currentUser.getIdToken();
-      const res   = await fetch(`${BASE_URL}/admin/stats`, {
+      const { start, end } = _statsRangeBounds();
+      const res   = await fetch(`${BASE_URL}/admin/stats?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, {
         headers: { "Authorization": `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
@@ -2044,11 +2101,13 @@
       }
       const fmtTok = n => n >= 1000000 ? (n/1000000).toFixed(2)+"M" : n >= 1000 ? (n/1000).toFixed(1)+"K" : String(n);
       const cols = t("statsCols");
-      let totalReqs = 0, totalIn = 0, totalOut = 0;
+      let totalReqs = 0, totalConvs = 0, totalIn = 0, totalOut = 0;
       let rows = data.map(u => {
-        totalReqs += u.total; totalIn += u.input_tokens; totalOut += u.output_tokens;
+        totalReqs += u.total; totalConvs += (u.conversations || 0);
+        totalIn += u.input_tokens; totalOut += u.output_tokens;
         return `<tr>
           <td>${u.email || u.uid}</td>
+          <td style="text-align:center">${u.conversations || 0}</td>
           <td style="text-align:center;font-weight:600">${u.total}</td>
           <td style="text-align:center;color:#0f6e56">${u.small || 0}</td>
           <td style="text-align:center;color:#9a6700">${u.medium || 0}</td>
@@ -2060,6 +2119,7 @@
       }).join("");
       rows += `<tr style="background:#f9f5ff;font-weight:600">
         <td>${t("statsTotal")}</td>
+        <td style="text-align:center">${totalConvs}</td>
         <td style="text-align:center">${totalReqs}</td>
         <td colspan="3"></td>
         <td style="text-align:center">${fmtTok(totalIn)}</td>

@@ -387,25 +387,37 @@ def _fs_log_usage(uid: str, email: str, session_id: str, route: str, score: floa
     })
 
 
-def _fs_get_stats() -> list:
-    cutoff = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=30)
-    docs = _db.collection("usage_logs").where("timestamp", ">=", cutoff).limit(10000).stream()
+def _fs_get_stats(start_dt: datetime.datetime, end_dt: datetime.datetime) -> list:
+    docs = (
+        _db.collection("usage_logs")
+        .where("timestamp", ">=", start_dt)
+        .where("timestamp", "<", end_dt)
+        .limit(20000).stream()
+    )
     stats: dict = {}
+    sessions: dict = {}  # uid -> set(session_id)，用來算「對話數」（不重複的 session）
     for doc in docs:
         d = doc.to_dict()
         uid = d.get("uid", "?")
         if uid not in stats:
             stats[uid] = {
                 "uid": uid, "email": d.get("email", ""),
-                "total": 0, "small": 0, "medium": 0, "large": 0, "tiny": 0,
+                "total": 0, "conversations": 0,
+                "small": 0, "medium": 0, "large": 0, "tiny": 0,
                 "input_tokens": 0, "output_tokens": 0,
             }
+            sessions[uid] = set()
         stats[uid]["total"] += 1
+        sid = d.get("session_id")
+        if sid:
+            sessions[uid].add(sid)
         route = d.get("route", "small")
         if route in stats[uid]:
             stats[uid][route] += 1
         stats[uid]["input_tokens"]  += d.get("input_tokens", 0)
         stats[uid]["output_tokens"] += d.get("output_tokens", 0)
+    for uid, s in stats.items():
+        s["conversations"] = len(sessions[uid])
     return sorted(stats.values(), key=lambda x: x["total"], reverse=True)
 
 
@@ -1251,10 +1263,30 @@ async def admin_set_config(config: RoutingConfig, authorization: Optional[str] =
     return {"ok": True}
 
 
+def _parse_iso_dt(s: Optional[str]) -> Optional[datetime.datetime]:
+    if not s:
+        return None
+    try:
+        dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    # 一律轉成 UTC aware，才能跟 Firestore 的 SERVER_TIMESTAMP 比較
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
+
+
 @app.get("/admin/stats")
-async def admin_stats(authorization: Optional[str] = Header(None)):
+async def admin_stats(
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+):
     await require_admin(authorization)
-    return await asyncio.to_thread(_fs_get_stats)
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    start_dt = _parse_iso_dt(start) or (now - datetime.timedelta(days=30))
+    end_dt = _parse_iso_dt(end) or now
+    return await asyncio.to_thread(_fs_get_stats, start_dt, end_dt)
 
 
 @app.get("/admin/users")
