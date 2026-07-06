@@ -714,15 +714,15 @@
       <div id="pane-config" class="tab-pane">
         <div class="cfg-row">
           <div class="cfg-label">
-            <strong>中模型門檻（Sonnet）</strong>
-            <span>評分 ≥ 此值 → 路由到 Sonnet 中模型</span>
+            <strong>中模型門檻</strong>
+            <span>評分 ≥ 此值 → 進入中模型候選池</span>
           </div>
           <input class="cfg-input" id="cfg-threshold-medium" type="number" min="0" max="10" step="0.5" value="4" />
         </div>
         <div class="cfg-row">
           <div class="cfg-label">
-            <strong>大模型門檻（Opus）</strong>
-            <span>評分 ≥ 此值 → 路由到 Opus 大模型</span>
+            <strong>大模型門檻</strong>
+            <span>評分 ≥ 此值 → 進入大模型候選池</span>
           </div>
           <input class="cfg-input" id="cfg-threshold-large" type="number" min="1" max="10" step="0.5" value="7" />
         </div>
@@ -736,13 +736,19 @@
         <div class="cfg-row">
           <div class="cfg-label">
             <strong>強制模型（測試用，僅管理員帳號）</strong>
-            <span>只影響管理員自己的對話，一般使用者仍走自動路由</span>
+            <span>可強制級距候選池或指定單一模型；只影響管理員自己的對話</span>
           </div>
           <select class="cfg-select" id="cfg-force-model">
             <option value="">自動路由</option>
-            <option value="small">強制 Haiku（小模型）</option>
-            <option value="medium">強制 Sonnet（中模型）</option>
-            <option value="large">強制 Opus（大模型）</option>
+            <option value="small">小模型候選池（由 judge 選）</option>
+            <option value="medium">中模型候選池（由 judge 選）</option>
+            <option value="large">大模型候選池（由 judge 選）</option>
+            <option value="cloud-small-claude">Haiku（小模型）</option>
+            <option value="cloud-small-gemini">Gemini Flash-Lite（小模型）</option>
+            <option value="cloud-medium-claude">Sonnet（中模型）</option>
+            <option value="cloud-medium-gemini">Gemini Flash（中模型）</option>
+            <option value="cloud-large-claude">Opus（大模型）</option>
+            <option value="cloud-large-gemini">Gemini Pro（大模型）</option>
             <option value="tiny">強制開源小模型</option>
           </select>
         </div>
@@ -791,7 +797,7 @@
     <div class="inner">
       <div class="welcome" id="welcome">
         <h2>有什麼我能幫你的？</h2>
-        <p>系統會自動判斷問題難度，路由到 Haiku、Sonnet 或 Opus 模型</p>
+        <p>系統會自動判斷問題難度，並在小／中／大級距中選擇合適模型</p>
       </div>
     </div>
   </div>
@@ -1241,6 +1247,30 @@
     preview.classList.remove("show");
   }
 
+  const MODEL_META = {
+    "cloud-small-claude":  { cls: "small",  short: "Haiku",             full: "Claude Haiku 4.5" },
+    "cloud-small-gemini":  { cls: "small",  short: "Gemini Flash-Lite", full: "Gemini 3.1 Flash-Lite" },
+    "cloud-medium-claude": { cls: "medium", short: "Sonnet",            full: "Claude Sonnet 5" },
+    "cloud-medium-gemini": { cls: "medium", short: "Gemini Flash",      full: "Gemini 3.5 Flash" },
+    "cloud-large-claude":  { cls: "large",  short: "Opus",              full: "Claude Opus 4.8" },
+    "cloud-large-gemini":  { cls: "large",  short: "Gemini Pro",        full: "Gemini 2.5 Pro" },
+  };
+
+  function _modelBadge(route, model) {
+    if (MODEL_META[model]) return [MODEL_META[model].cls, MODEL_META[model].short];
+    const routeMap = {
+      small: ["small", t("badgeSmall")],
+      medium: ["medium", t("badgeMedium")],
+      large: ["large", t("badgeLarge")],
+      tiny: ["tiny", t("badgeTiny")],
+    };
+    return routeMap[route] || ["small", t("badgeSmall")];
+  }
+
+  function _modelFullName(model) {
+    return MODEL_META[model]?.full || model;
+  }
+
   // ── Chat UI helpers ──
   function _buildFileCard(fileInfo) {
     if (!fileInfo || !fileInfo.name) return "";
@@ -1268,13 +1298,7 @@
     let metaHtml = "";
     if (data) {
       const id   = "j" + Date.now() + Math.random().toString(36).slice(2,6);
-      const BADGE_MAP = {
-        small: ["small", t("badgeSmall")],
-        medium: ["medium", t("badgeMedium")],
-        large: ["large", t("badgeLarge")],
-        tiny:  ["tiny",  t("badgeTiny")],
-      };
-      const [cls, label] = BADGE_MAP[data.route] || ["small", t("badgeSmall")];
+      const [cls, label] = _modelBadge(data.route, data.model);
       const timingHtml = data.no_timing ? "" :
         `<span class="timing">${data.judge_elapsed_ms + data.answer_elapsed_ms} ms</span>`;
       metaHtml = `
@@ -1285,7 +1309,7 @@
         </div>
         <div class="judge-panel" id="${id}">
           ${t("judgeScore")} <b>${data.judge.score.toFixed(1)}</b> / 10<br>
-          ${data.model ? `${t("judgeModel")} <b>${data.model}</b><br>` : ""}
+          ${data.model ? `${t("judgeModel")} <b>${_modelFullName(data.model)}</b><br>` : ""}
           ${data.judge.reason || t("judgeNoReason")}
         </div>`;
     }
@@ -1321,13 +1345,7 @@
   // ── Streaming helpers ──
   function _buildMeta(judgeEvt, answerMs) {
     const id = "j" + Date.now() + Math.random().toString(36).slice(2,6);
-    const BADGE_MAP = {
-      small:["small",t("badgeSmall")],
-      medium:["medium",t("badgeMedium")],
-      large:["large",t("badgeLarge")],
-      tiny:["tiny",t("badgeTiny")]
-    };
-    const [cls, label] = BADGE_MAP[judgeEvt.route] || ["small",t("badgeSmall")];
+    const [cls, label] = _modelBadge(judgeEvt.route, judgeEvt.model);
     const timing = answerMs != null
       ? `<span class="timing">${judgeEvt.judge_elapsed_ms + answerMs} ms</span>` : "";
     return `<div class="meta">
@@ -1337,7 +1355,7 @@
     </div>
     <div class="judge-panel" id="${id}">
       ${t("judgeScore")} <b>${judgeEvt.judge.score.toFixed(1)}</b> / 10<br>
-      ${judgeEvt.model ? `${t("judgeModel")} <b>${judgeEvt.model}</b><br>` : ""}
+      ${judgeEvt.model ? `${t("judgeModel")} <b>${_modelFullName(judgeEvt.model)}</b><br>` : ""}
       ${judgeEvt.judge.reason || t("judgeNoReason")}
     </div>`;
   }
@@ -1604,7 +1622,7 @@
       newChatBtn:       "＋ 新對話",
       convEmpty:        "尚無對話記錄",
       welcomeH2:        "有什麼我能幫你的？",
-      welcomeP:         "系統會自動判斷問題難度，路由到 Haiku、Sonnet 或 Opus 模型",
+      welcomeP:         "系統會自動判斷問題難度，並在小／中／大級距中選擇合適模型",
       placeholder:      "輸入訊息… (Enter 送出，Shift+Enter 換行)",
       hint:             "AI 可能出錯，重要內容請自行驗證",
       authTitle_login:  "歡迎使用 NTPU AI",
@@ -1632,25 +1650,31 @@
       noAdminH3:        "您尚未取得管理員權限",
       noAdminP:         "若您是第一位使用者，可以點下方按鈕成為系統管理員。\n若管理員已存在，請聯絡管理員為您授權。",
       becomeAdmin:      "申請成為第一位管理員",
-      cfgMediumLabel:   "中模型門檻（Sonnet）",
-      cfgMediumDesc:    "評分 ≥ 此值 → 路由到 Sonnet 中模型",
-      cfgLargeLabel:    "大模型門檻（Opus）",
-      cfgLargeDesc:     "評分 ≥ 此值 → 路由到 Opus 大模型",
+      cfgMediumLabel:   "中模型門檻",
+      cfgMediumDesc:    "評分 ≥ 此值 → 進入中模型候選池",
+      cfgLargeLabel:    "大模型門檻",
+      cfgLargeDesc:     "評分 ≥ 此值 → 進入大模型候選池",
       cfgTinyLabel:     "開源模型門檻（tiny）",
       cfgTinyDesc:      "評分 < 此值 → 路由到開源小模型（空白 = 停用）",
       cfgForceLabel:    "強制模型（測試用，僅管理員帳號）",
-      cfgForceDesc:     "只影響管理員自己的對話，一般使用者仍走自動路由",
+      cfgForceDesc:     "可強制級距候選池或指定單一模型；只影響管理員自己的對話",
       cfgForceAuto:     "自動路由",
-      cfgForceSmall:    "強制 Haiku（小模型）",
-      cfgForceMedium:   "強制 Sonnet（中模型）",
-      cfgForceLarge:    "強制 Opus（大模型）",
+      cfgForceTierSmall:  "小模型候選池（由 judge 選）",
+      cfgForceTierMedium: "中模型候選池（由 judge 選）",
+      cfgForceTierLarge:  "大模型候選池（由 judge 選）",
+      cfgForceSmallClaude:  "Haiku（小模型）",
+      cfgForceSmallGemini:  "Gemini Flash-Lite（小模型）",
+      cfgForceMediumClaude: "Sonnet（中模型）",
+      cfgForceMediumGemini: "Gemini Flash（中模型）",
+      cfgForceLargeClaude:  "Opus（大模型）",
+      cfgForceLargeGemini:  "Gemini Pro（大模型）",
       cfgForceTiny:     "強制開源小模型",
       saveBtn:          "儲存設定",
       cfgSaved:         "✓ 設定已儲存，約 30 秒後生效",
       statsRange:       "統計範圍：近 30 天（含 judge 模型消耗）",
       statsEmpty:       "近 30 天尚無使用記錄",
       statsLoading:     "載入中…",
-      statsCols:        ["使用者","次數","Haiku","Sonnet","Opus","輸入 Token","輸出 Token","總 Token"],
+      statsCols:        ["使用者","次數","小模型","中模型","大模型","輸入 Token","輸出 Token","總 Token"],
       statsTotal:       "合計",
       usersEmpty:       "無使用者",
       usersSelf:        "(你)",
@@ -1719,7 +1743,7 @@
       newChatBtn:       "＋ New Chat",
       convEmpty:        "No conversations yet",
       welcomeH2:        "How can I help you?",
-      welcomeP:         "The system auto-routes your question to Haiku, Sonnet, or Opus based on complexity",
+      welcomeP:         "The system auto-routes your question to the right model within small, medium, or large tiers",
       placeholder:      "Type a message… (Enter to send, Shift+Enter for newline)",
       hint:             "AI may make mistakes. Please verify important information.",
       authTitle_login:  "Welcome to NTPU AI",
@@ -1747,25 +1771,31 @@
       noAdminH3:        "You don't have admin access",
       noAdminP:         "If you are the first user, click below to become admin.\nOtherwise, ask an existing admin to grant you access.",
       becomeAdmin:      "Become the first admin",
-      cfgMediumLabel:   "Medium model threshold (Sonnet)",
-      cfgMediumDesc:    "Score ≥ this value → route to Sonnet medium model",
-      cfgLargeLabel:    "Large model threshold (Opus)",
-      cfgLargeDesc:     "Score ≥ this value → route to Opus large model",
+      cfgMediumLabel:   "Medium model threshold",
+      cfgMediumDesc:    "Score ≥ this value → use the medium model pool",
+      cfgLargeLabel:    "Large model threshold",
+      cfgLargeDesc:     "Score ≥ this value → use the large model pool",
       cfgTinyLabel:     "Open-source model threshold (tiny)",
       cfgTinyDesc:      "Score < this value → route to open-source model (empty = disabled)",
       cfgForceLabel:    "Force model (admin test only)",
-      cfgForceDesc:     "Only affects the admin's own conversations; other users still use auto-routing",
+      cfgForceDesc:     "Force a tier pool or a single model; only affects the admin's own conversations",
       cfgForceAuto:     "Auto route",
-      cfgForceSmall:    "Force Haiku (small)",
-      cfgForceMedium:   "Force Sonnet (medium)",
-      cfgForceLarge:    "Force Opus (large)",
+      cfgForceTierSmall:  "Small model pool (judge chooses)",
+      cfgForceTierMedium: "Medium model pool (judge chooses)",
+      cfgForceTierLarge:  "Large model pool (judge chooses)",
+      cfgForceSmallClaude:  "Haiku (small)",
+      cfgForceSmallGemini:  "Gemini Flash-Lite (small)",
+      cfgForceMediumClaude: "Sonnet (medium)",
+      cfgForceMediumGemini: "Gemini Flash (medium)",
+      cfgForceLargeClaude:  "Opus (large)",
+      cfgForceLargeGemini:  "Gemini Pro (large)",
       cfgForceTiny:     "Force open-source model",
       saveBtn:          "Save Settings",
       cfgSaved:         "✓ Settings saved. Takes effect in ~30 seconds.",
       statsRange:       "Last 30 days (includes judge model usage)",
       statsEmpty:       "No usage in the last 30 days",
       statsLoading:     "Loading…",
-      statsCols:        ["User","Requests","Haiku","Sonnet","Opus","Input Tokens","Output Tokens","Total Tokens"],
+      statsCols:        ["User","Requests","Small","Medium","Large","Input Tokens","Output Tokens","Total Tokens"],
       statsTotal:       "Total",
       usersEmpty:       "No users",
       usersSelf:        "(you)",
@@ -1878,12 +1908,18 @@
       cfgRows[3].querySelector("span").textContent   = L.cfgForceDesc;
     }
     const forceOpts = document.querySelectorAll("#cfg-force-model option");
-    if (forceOpts.length === 5) {
+    if (forceOpts.length === 11) {
       forceOpts[0].textContent = L.cfgForceAuto;
-      forceOpts[1].textContent = L.cfgForceSmall;
-      forceOpts[2].textContent = L.cfgForceMedium;
-      forceOpts[3].textContent = L.cfgForceLarge;
-      forceOpts[4].textContent = L.cfgForceTiny;
+      forceOpts[1].textContent = L.cfgForceTierSmall;
+      forceOpts[2].textContent = L.cfgForceTierMedium;
+      forceOpts[3].textContent = L.cfgForceTierLarge;
+      forceOpts[4].textContent = L.cfgForceSmallClaude;
+      forceOpts[5].textContent = L.cfgForceSmallGemini;
+      forceOpts[6].textContent = L.cfgForceMediumClaude;
+      forceOpts[7].textContent = L.cfgForceMediumGemini;
+      forceOpts[8].textContent = L.cfgForceLargeClaude;
+      forceOpts[9].textContent = L.cfgForceLargeGemini;
+      forceOpts[10].textContent = L.cfgForceTiny;
     }
     document.querySelector(".save-btn").textContent = L.saveBtn;
     // Welcome screen (if visible)

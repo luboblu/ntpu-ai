@@ -71,6 +71,8 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
   不會影響回答品質。
 - **每個級距有多模型候選**：judge 會同時輸出 `route`（small / medium / large）與實際 `model`
   alias。若 judge 選到不存在或不屬於該級距的模型，後端會自動退回該級距第一個候選模型。
+- **管理員可強制級距或單一模型**：管理員面板的「強制模型」可以選 small / medium / large
+  候選池，也可以直接指定 `cloud-small-gemini`、`cloud-medium-claude` 等單一模型。
 - **任務累積難度（黏性路由）**：`app.py` 裡 `DECAY_PER_TURN = 0.45`，分數用
   `max(本次正規化分數, 上一輪分數 - 衰減值)` 計算，不會因為單句話變簡單就立刻降級。
 - **AI 判斷式會帶上下文**：`model_classify()` 會把上一輪對話內容一起餵給判斷模型。

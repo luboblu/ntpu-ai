@@ -59,6 +59,12 @@ MODEL_NOTES = {
     "cloud-large-gemini": "Gemini 2.5 Pro：深度推理與 coding，適合複雜任務",
 }
 
+MODEL_TO_ROUTE = {
+    alias: route
+    for route, aliases in MODEL_CANDIDATES.items()
+    for alias in aliases
+}
+
 
 # ------------------------------------------------------------------
 # Google Cloud Storage
@@ -225,6 +231,9 @@ def _select_route(config: dict, judge: dict, force: Optional[str]) -> tuple[str,
     score = float(judge.get("score", 5.0))
     requested_route = judge.get("route")
     requested_model = judge.get("model")
+
+    if force in MODEL_TO_ROUTE:
+        return MODEL_TO_ROUTE[force], force
 
     if force in ("small", "medium", "large", "tiny"):
         route = force
