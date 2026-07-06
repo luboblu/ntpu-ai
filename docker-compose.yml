@@ -10,6 +10,7 @@ services:
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
   router-backend:
     build: ./router_backend
@@ -22,4 +23,5 @@ services:
       - LITELLM_MASTER_KEY=sk-1234
       - JUDGE_MODEL_ALIAS=judge-model
       - SMALL_MODEL_ALIAS=cloud-small
+      - MEDIUM_MODEL_ALIAS=cloud-medium
       - LARGE_MODEL_ALIAS=cloud-large

@@ -10,11 +10,13 @@
 LiteLLM Proxy（OpenAI 相容介面）
    ├── judge-model  → 雲端，專門判斷難度
    ├── cloud-small  → 雲端小模型，負責簡單任務的回答
+   ├── cloud-medium → 雲端中模型，負責中等任務的回答
    └── cloud-large  → 雲端大模型，負責困難任務的回答
 ```
 
 地端開源模型（Ollama／vLLM）先不接，之後資料隱私需求確定後再加進來，
-到時只要在 `litellm_config.yaml` 多加一個 model_name、在 `app.py` 多一個路由判斷分支即可，
+到時只要在 `litellm_config.yaml` 多加一個 model_name、在 `app.py` 多一個路由判斷分支即可；
+目前雲端回答模型已經有 small / medium / large 三層，
 不需要動前端跟其他邏輯。
 
 ## 1. 啟動方式（原生安裝，不使用 Docker）
@@ -23,6 +25,7 @@ LiteLLM Proxy（OpenAI 相容介面）
 # 1) LiteLLM Proxy
 pip install 'litellm[proxy]'
 export ANTHROPIC_API_KEY=sk-ant-xxxxx      # 換成你自己的金鑰
+export GEMINI_API_KEY=xxxxx                # judge-model 仍使用 Gemini 時需要
 litellm --config litellm_config.yaml --port 4000 &
 
 # 2) 路由後端
@@ -56,15 +59,15 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
 
 | 檔案 | 負責什麼 | 何時要改 |
 |---|---|---|
-| `litellm_config.yaml` | 定義「judge-model」「cloud-small」「cloud-large」三個別名實際對應哪個模型 | 換供應商、換模型版本時 |
+| `litellm_config.yaml` | 定義「judge-model」「cloud-small」「cloud-medium」「cloud-large」四個別名實際對應哪個模型 | 換供應商、換模型版本時 |
 | `router_backend/app.py` | 難度判斷邏輯（AI 判斷式 prompt）、任務累積分數的衰減速度 | 要調整路由準不準、想改判斷邏輯時 |
 | `docker-compose.yml` | 服務怎麼啟動、port、環境變數 | 想用 Docker 部署時 |
 | `frontend/index.html` | 使用者介面 | 想改介面、改 BASE_URL 時 |
 
-## 4. 三個模型角色的設計理由
+## 4. 模型角色的設計理由
 
 - **judge-model 跟負責回答的模型分開**：判斷難度用一個便宜模型專門做這件事，跟實際回答的
-  `cloud-small` / `cloud-large` 互相獨立，之後想單獨換掉判斷邏輯（例如換成自己訓練的分類器）
+  `cloud-small` / `cloud-medium` / `cloud-large` 互相獨立，之後想單獨換掉判斷邏輯（例如換成自己訓練的分類器）
   不會影響回答品質。
 - **任務累積難度（黏性路由）**：`app.py` 裡 `DECAY_PER_TURN = 0.45`，分數用
   `max(本次正規化分數, 上一輪分數 - 衰減值)` 計算，不會因為單句話變簡單就立刻降級。
@@ -72,9 +75,11 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
 
 ## 5. 後續可以調整的參數
 
-- `MODEL_THRESHOLD`：路由門檻（0-10 分制），建議上線後用真實 log 重新校準。
+- `threshold_medium` / `threshold_large`：路由門檻（0-10 分制），預設 4 分以上走中模型、7 分以上走大模型，建議上線後用真實 log 重新校準。
 - `DECAY_PER_TURN`：數字越小，黏性越強（越不容易降回小模型）。
-- 三個模型角色都可以換成不同供應商（例如 `cloud-small` 換成 OpenAI 的 `gpt-4o-mini`），
+- Claude 回答模型目前建議對應為：`cloud-small` = Haiku、`cloud-medium` = Sonnet、`cloud-large` = Opus。
+- Gemini 也可以三層對應：`cloud-small` = Flash-Lite、`cloud-medium` = Flash、`cloud-large` = Pro。若要穩定部署，large 可用 `gemini-2.5-pro`；若要追最新，可評估 `gemini-3.1-pro` Preview。
+- 三個回答模型角色都可以換成不同供應商（例如 `cloud-small` 換成 OpenAI 的 `gpt-4o-mini`），
   只要改 `litellm_config.yaml`，`app.py` 完全不用動——這就是 LiteLLM 統一介面的好處。
 
 ## 6. 已知的簡化（正式上線前建議處理）

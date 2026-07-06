@@ -23,6 +23,7 @@ from pydantic import BaseModel
 LITELLM_BASE_URL  = os.environ.get("LITELLM_BASE_URL", "http://localhost:4000")
 LITELLM_API_KEY   = os.environ.get("LITELLM_MASTER_KEY", "sk-1234")
 SMALL_MODEL_ALIAS = os.environ.get("SMALL_MODEL_ALIAS", "cloud-small")
+MEDIUM_MODEL_ALIAS = os.environ.get("MEDIUM_MODEL_ALIAS", "cloud-medium")
 LARGE_MODEL_ALIAS = os.environ.get("LARGE_MODEL_ALIAS", "cloud-large")
 JUDGE_MODEL_ALIAS = os.environ.get("JUDGE_MODEL_ALIAS", "judge-model")
 TINY_MODEL_ALIAS  = os.environ.get("TINY_MODEL_ALIAS", "")  # 開源小模型，選填
@@ -31,6 +32,7 @@ GCS_BUCKET        = os.environ.get("GCS_BUCKET", "ntpu-ai-uploads")
 UPLOAD_MAX_BYTES  = 20 * 1024 * 1024  # 20 MB
 TAVILY_KEY        = os.environ.get("TAVILY_API_KEY", "")
 OPENAI_API_KEY    = os.environ.get("OPENAI_API_KEY", "")
+MAX_ANSWER_TOKENS = 64000
 
 
 # ------------------------------------------------------------------
@@ -80,8 +82,9 @@ class ChatRequest(BaseModel):
 
 class RoutingConfig(BaseModel):
     threshold_tiny: Optional[float] = None   # None = 不啟用開源小模型層
-    threshold_large: float = 6.0
-    force_model: Optional[str] = None        # None/"small"/"large"/"tiny"
+    threshold_medium: float = 4.0
+    threshold_large: float = 7.0
+    force_model: Optional[str] = None        # None/"small"/"medium"/"large"/"tiny"
 
 
 class UserProfileRequest(BaseModel):
@@ -131,13 +134,18 @@ async def require_admin(authorization: Optional[str] = Header(None)) -> str:
 # ------------------------------------------------------------------
 # Routing config（Firestore 讀取，30 秒快取）
 # ------------------------------------------------------------------
-_routing_cache: dict = {"threshold_tiny": None, "threshold_large": 6.0, "force_model": None}
+_routing_cache: dict = {
+    "threshold_tiny": None,
+    "threshold_medium": 4.0,
+    "threshold_large": 7.0,
+    "force_model": None,
+}
 _routing_cache_ts: float = 0.0
 
 
 def _fs_get_routing_config() -> dict:
     doc = _db.collection("config").document("routing").get()
-    return doc.to_dict() if doc.exists else {"threshold_tiny": None, "threshold_large": 6.0, "force_model": None}
+    return doc.to_dict() if doc.exists else dict(_routing_cache)
 
 
 def _fs_set_routing_config(data: dict):
@@ -152,6 +160,32 @@ async def get_routing_config() -> dict:
         _routing_cache = await asyncio.to_thread(_fs_get_routing_config)
         _routing_cache_ts = time.time()
     return _routing_cache
+
+
+def _select_route(config: dict, score: float, force: Optional[str]) -> tuple[str, str]:
+    if force in ("small", "medium", "large", "tiny"):
+        route = force
+    else:
+        t_tiny = config.get("threshold_tiny")
+        t_medium = float(config.get("threshold_medium") or 4.0)
+        t_large = float(config.get("threshold_large") or 7.0)
+
+        if t_tiny is not None and score < float(t_tiny):
+            route = "tiny"
+        elif score >= t_large:
+            route = "large"
+        elif score >= t_medium:
+            route = "medium"
+        else:
+            route = "small"
+
+    model_alias = {
+        "tiny": TINY_MODEL_ALIAS or SMALL_MODEL_ALIAS,
+        "small": SMALL_MODEL_ALIAS,
+        "medium": MEDIUM_MODEL_ALIAS,
+        "large": LARGE_MODEL_ALIAS,
+    }[route]
+    return route, model_alias
 
 
 # ------------------------------------------------------------------
@@ -302,7 +336,7 @@ def _fs_get_stats() -> list:
         if uid not in stats:
             stats[uid] = {
                 "uid": uid, "email": d.get("email", ""),
-                "total": 0, "small": 0, "large": 0, "tiny": 0,
+                "total": 0, "small": 0, "medium": 0, "large": 0, "tiny": 0,
                 "input_tokens": 0, "output_tokens": 0,
             }
         stats[uid]["total"] += 1
@@ -350,7 +384,7 @@ async def delete_session(uid: str, session_id: str):
 # ------------------------------------------------------------------
 # LiteLLM 呼叫
 # ------------------------------------------------------------------
-async def call_litellm(client: httpx.AsyncClient, model_alias: str, messages: list, max_tokens: int = 65536) -> str:
+async def call_litellm(client: httpx.AsyncClient, model_alias: str, messages: list, max_tokens: int = MAX_ANSWER_TOKENS) -> str:
     resp = await client.post(
         f"{LITELLM_BASE_URL}/v1/chat/completions",
         headers={"Authorization": f"Bearer {LITELLM_API_KEY}"},
@@ -728,7 +762,7 @@ async def _run_search_tool(name: str, args: dict) -> str:
 
 
 async def run_tools(client: httpx.AsyncClient, model_alias: str, messages: list,
-                    tools: list, max_tokens: int = 65536, max_iters: int = 5):
+                    tools: list, max_tokens: int = MAX_ANSWER_TOKENS, max_iters: int = 5):
     """驅動 tool-calling 迴圈。
 
     以 async generator 形式產出事件：
@@ -787,7 +821,7 @@ def _chunk_text(text: str, size: int = 24):
 # ------------------------------------------------------------------
 # Judge
 # ------------------------------------------------------------------
-JUDGE_SYSTEM_PROMPT = """你是一個路由決策模型，專門負責評估使用者訊息的任務難度，決定要交給輕量模型（Flash）還是強力模型（Pro）處理。
+JUDGE_SYSTEM_PROMPT = """你是一個路由決策模型，專門負責評估使用者訊息的任務難度，決定要交給小模型、中模型或大模型處理。
 
 你的唯一工作是輸出難度分數，不要回答使用者的問題。
 
@@ -798,7 +832,7 @@ JUDGE_SYSTEM_PROMPT = """你是一個路由決策模型，專門負責評估使�
 
 注意事項：
 - 若訊息本身簡短，但對話脈絡顯示是複雜任務的延伸（如「幫我改一下」接在程式碼討論後），請評估整個任務的難度
-- 評分要保守：寧可低估讓 Flash 先試，也不要動輒給高分浪費 Pro
+- 評分要保守：寧可低估讓較小模型先試，也不要動輒給高分浪費大模型
 
 輸出格式（嚴格遵守，不得有多餘文字）：
 {"score": 數字, "reason": "一句話說明"}"""
@@ -863,24 +897,8 @@ async def chat(req: ChatRequest, authorization: Optional[str] = Header(None)):
         judge_elapsed_ms = int((time.time() - t0) * 1000)
 
         # force_model 只對管理員帳號生效，一般使用者維持正常路由
-        force     = config.get("force_model") if decoded.get("admin") else None
-        t_large   = float(config.get("threshold_large") or 6.0)
-        t_tiny    = config.get("threshold_tiny")
-
-        if force in ("small", "large", "tiny"):
-            route = force
-        elif t_tiny is not None and judge["score"] < float(t_tiny):
-            route = "tiny"
-        elif judge["score"] >= t_large:
-            route = "large"
-        else:
-            route = "small"
-
-        model_alias = {
-            "tiny":  TINY_MODEL_ALIAS or SMALL_MODEL_ALIAS,
-            "small": SMALL_MODEL_ALIAS,
-            "large": LARGE_MODEL_ALIAS,
-        }[route]
+        force = config.get("force_model") if decoded.get("admin") else None
+        route, model_alias = _select_route(config, judge["score"], force)
 
         judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})
         sys_prompt = await get_user_system_prompt(uid)
@@ -950,24 +968,8 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
                 judge_elapsed_ms = int((time.time() - t0) * 1000)
 
                 # 2. 路由
-                force   = config.get("force_model") if decoded.get("admin") else None
-                t_large = float(config.get("threshold_large") or 6.0)
-                t_tiny  = config.get("threshold_tiny")
-
-                if force in ("small", "large", "tiny"):
-                    route = force
-                elif t_tiny is not None and judge["score"] < float(t_tiny):
-                    route = "tiny"
-                elif judge["score"] >= t_large:
-                    route = "large"
-                else:
-                    route = "small"
-
-                model_alias = {
-                    "tiny":  TINY_MODEL_ALIAS or SMALL_MODEL_ALIAS,
-                    "small": SMALL_MODEL_ALIAS,
-                    "large": LARGE_MODEL_ALIAS,
-                }[route]
+                force = config.get("force_model") if decoded.get("admin") else None
+                route, model_alias = _select_route(config, judge["score"], force)
 
                 tools = _build_search_tools(req) if TAVILY_KEY else []
                 # 工具啟用時避免路由到不支援 function calling 的開源小模型
@@ -1004,7 +1006,7 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
                         "POST",
                         f"{LITELLM_BASE_URL}/v1/chat/completions",
                         headers={"Authorization": f"Bearer {LITELLM_API_KEY}"},
-                        json={"model": model_alias, "messages": answer_messages, "max_tokens": 65536,
+                        json={"model": model_alias, "messages": answer_messages, "max_tokens": MAX_ANSWER_TOKENS,
                               "stream": True, "stream_options": {"include_usage": True}},
                         timeout=httpx.Timeout(connect=30, read=300, write=30, pool=10),
                     ) as resp:

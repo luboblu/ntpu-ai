@@ -221,6 +221,7 @@
     border-radius: 999px; border: 1px solid;
   }
   .badge.small { background: #e8f7f1; color: #0f6e56; border-color: #a8dfc8; }
+  .badge.medium { background: #fff7df; color: #9a6700; border-color: #f2d27a; }
   .badge.large { background: #fdf0ec; color: #b84423; border-color: #f0b9a8; }
   .badge.tiny  { background: #f0f4ff; color: #3b5bdb; border-color: #bac8ff; }
   .timing { font-size: 11px; color: var(--text5); }
@@ -713,10 +714,17 @@
       <div id="pane-config" class="tab-pane">
         <div class="cfg-row">
           <div class="cfg-label">
-            <strong>大模型門檻（Pro）</strong>
-            <span>評分 ≥ 此值 → 路由到 Pro 模型</span>
+            <strong>中模型門檻（Sonnet）</strong>
+            <span>評分 ≥ 此值 → 路由到 Sonnet 中模型</span>
           </div>
-          <input class="cfg-input" id="cfg-threshold-large" type="number" min="1" max="10" step="0.5" value="6" />
+          <input class="cfg-input" id="cfg-threshold-medium" type="number" min="0" max="10" step="0.5" value="4" />
+        </div>
+        <div class="cfg-row">
+          <div class="cfg-label">
+            <strong>大模型門檻（Opus）</strong>
+            <span>評分 ≥ 此值 → 路由到 Opus 大模型</span>
+          </div>
+          <input class="cfg-input" id="cfg-threshold-large" type="number" min="1" max="10" step="0.5" value="7" />
         </div>
         <div class="cfg-row">
           <div class="cfg-label">
@@ -732,8 +740,9 @@
           </div>
           <select class="cfg-select" id="cfg-force-model">
             <option value="">自動路由</option>
-            <option value="small">強制 Flash（小模型）</option>
-            <option value="large">強制 Pro（大模型）</option>
+            <option value="small">強制 Haiku（小模型）</option>
+            <option value="medium">強制 Sonnet（中模型）</option>
+            <option value="large">強制 Opus（大模型）</option>
             <option value="tiny">強制開源小模型</option>
           </select>
         </div>
@@ -782,7 +791,7 @@
     <div class="inner">
       <div class="welcome" id="welcome">
         <h2>有什麼我能幫你的？</h2>
-        <p>系統會自動判斷問題難度，路由到 Flash 或 Pro 模型</p>
+        <p>系統會自動判斷問題難度，路由到 Haiku、Sonnet 或 Opus 模型</p>
       </div>
     </div>
   </div>
@@ -1261,6 +1270,7 @@
       const id   = "j" + Date.now() + Math.random().toString(36).slice(2,6);
       const BADGE_MAP = {
         small: ["small", t("badgeSmall")],
+        medium: ["medium", t("badgeMedium")],
         large: ["large", t("badgeLarge")],
         tiny:  ["tiny",  t("badgeTiny")],
       };
@@ -1310,7 +1320,12 @@
   // ── Streaming helpers ──
   function _buildMeta(judgeEvt, answerMs) {
     const id = "j" + Date.now() + Math.random().toString(36).slice(2,6);
-    const BADGE_MAP = { small:["small",t("badgeSmall")], large:["large",t("badgeLarge")], tiny:["tiny",t("badgeTiny")] };
+    const BADGE_MAP = {
+      small:["small",t("badgeSmall")],
+      medium:["medium",t("badgeMedium")],
+      large:["large",t("badgeLarge")],
+      tiny:["tiny",t("badgeTiny")]
+    };
     const [cls, label] = BADGE_MAP[judgeEvt.route] || ["small",t("badgeSmall")];
     const timing = answerMs != null
       ? `<span class="timing">${judgeEvt.judge_elapsed_ms + answerMs} ms</span>` : "";
@@ -1586,7 +1601,7 @@
       newChatBtn:       "＋ 新對話",
       convEmpty:        "尚無對話記錄",
       welcomeH2:        "有什麼我能幫你的？",
-      welcomeP:         "系統會自動判斷問題難度，路由到 Flash 或 Pro 模型",
+      welcomeP:         "系統會自動判斷問題難度，路由到 Haiku、Sonnet 或 Opus 模型",
       placeholder:      "輸入訊息… (Enter 送出，Shift+Enter 換行)",
       hint:             "AI 可能出錯，重要內容請自行驗證",
       authTitle_login:  "歡迎使用 NTPU AI",
@@ -1614,22 +1629,25 @@
       noAdminH3:        "您尚未取得管理員權限",
       noAdminP:         "若您是第一位使用者，可以點下方按鈕成為系統管理員。\n若管理員已存在，請聯絡管理員為您授權。",
       becomeAdmin:      "申請成為第一位管理員",
-      cfgLargeLabel:    "大模型門檻（Pro）",
-      cfgLargeDesc:     "評分 ≥ 此值 → 路由到 Pro 模型",
+      cfgMediumLabel:   "中模型門檻（Sonnet）",
+      cfgMediumDesc:    "評分 ≥ 此值 → 路由到 Sonnet 中模型",
+      cfgLargeLabel:    "大模型門檻（Opus）",
+      cfgLargeDesc:     "評分 ≥ 此值 → 路由到 Opus 大模型",
       cfgTinyLabel:     "開源模型門檻（tiny）",
       cfgTinyDesc:      "評分 < 此值 → 路由到開源小模型（空白 = 停用）",
       cfgForceLabel:    "強制模型（測試用，僅管理員帳號）",
       cfgForceDesc:     "只影響管理員自己的對話，一般使用者仍走自動路由",
       cfgForceAuto:     "自動路由",
-      cfgForceSmall:    "強制 Flash（小模型）",
-      cfgForceLarge:    "強制 Pro（大模型）",
+      cfgForceSmall:    "強制 Haiku（小模型）",
+      cfgForceMedium:   "強制 Sonnet（中模型）",
+      cfgForceLarge:    "強制 Opus（大模型）",
       cfgForceTiny:     "強制開源小模型",
       saveBtn:          "儲存設定",
       cfgSaved:         "✓ 設定已儲存，約 30 秒後生效",
       statsRange:       "統計範圍：近 30 天（含 judge 模型消耗）",
       statsEmpty:       "近 30 天尚無使用記錄",
       statsLoading:     "載入中…",
-      statsCols:        ["使用者","次數","Flash","Pro","輸入 Token","輸出 Token","總 Token"],
+      statsCols:        ["使用者","次數","Haiku","Sonnet","Opus","輸入 Token","輸出 Token","總 Token"],
       statsTotal:       "合計",
       usersEmpty:       "無使用者",
       usersSelf:        "(你)",
@@ -1642,8 +1660,9 @@
       usersColCreated:  "建立時間",
       usersColAction:   "操作",
       convGroups:       ["今天","昨天","過去 7 天","更早"],
-      badgeSmall:       "Flash（小模型）",
-      badgeLarge:       "Pro（大模型）",
+      badgeSmall:       "Haiku（小模型）",
+      badgeMedium:      "Sonnet（中模型）",
+      badgeLarge:       "Opus（大模型）",
       badgeTiny:        "開源模型",
       judgeToggle:      "難度分析 ▾",
       judgeScore:       "本次評分",
@@ -1696,7 +1715,7 @@
       newChatBtn:       "＋ New Chat",
       convEmpty:        "No conversations yet",
       welcomeH2:        "How can I help you?",
-      welcomeP:         "The system auto-routes your question to Flash or Pro based on complexity",
+      welcomeP:         "The system auto-routes your question to Haiku, Sonnet, or Opus based on complexity",
       placeholder:      "Type a message… (Enter to send, Shift+Enter for newline)",
       hint:             "AI may make mistakes. Please verify important information.",
       authTitle_login:  "Welcome to NTPU AI",
@@ -1724,22 +1743,25 @@
       noAdminH3:        "You don't have admin access",
       noAdminP:         "If you are the first user, click below to become admin.\nOtherwise, ask an existing admin to grant you access.",
       becomeAdmin:      "Become the first admin",
-      cfgLargeLabel:    "Large model threshold (Pro)",
-      cfgLargeDesc:     "Score ≥ this value → route to Pro model",
+      cfgMediumLabel:   "Medium model threshold (Sonnet)",
+      cfgMediumDesc:    "Score ≥ this value → route to Sonnet medium model",
+      cfgLargeLabel:    "Large model threshold (Opus)",
+      cfgLargeDesc:     "Score ≥ this value → route to Opus large model",
       cfgTinyLabel:     "Open-source model threshold (tiny)",
       cfgTinyDesc:      "Score < this value → route to open-source model (empty = disabled)",
       cfgForceLabel:    "Force model (admin test only)",
       cfgForceDesc:     "Only affects the admin's own conversations; other users still use auto-routing",
       cfgForceAuto:     "Auto route",
-      cfgForceSmall:    "Force Flash (small)",
-      cfgForceLarge:    "Force Pro (large)",
+      cfgForceSmall:    "Force Haiku (small)",
+      cfgForceMedium:   "Force Sonnet (medium)",
+      cfgForceLarge:    "Force Opus (large)",
       cfgForceTiny:     "Force open-source model",
       saveBtn:          "Save Settings",
       cfgSaved:         "✓ Settings saved. Takes effect in ~30 seconds.",
       statsRange:       "Last 30 days (includes judge model usage)",
       statsEmpty:       "No usage in the last 30 days",
       statsLoading:     "Loading…",
-      statsCols:        ["User","Requests","Flash","Pro","Input Tokens","Output Tokens","Total Tokens"],
+      statsCols:        ["User","Requests","Haiku","Sonnet","Opus","Input Tokens","Output Tokens","Total Tokens"],
       statsTotal:       "Total",
       usersEmpty:       "No users",
       usersSelf:        "(you)",
@@ -1752,8 +1774,9 @@
       usersColCreated:  "Created",
       usersColAction:   "Actions",
       convGroups:       ["Today","Yesterday","Past 7 days","Earlier"],
-      badgeSmall:       "Flash (small)",
-      badgeLarge:       "Pro (large)",
+      badgeSmall:       "Haiku (small)",
+      badgeMedium:      "Sonnet (medium)",
+      badgeLarge:       "Opus (large)",
       badgeTiny:        "Open-source",
       judgeToggle:      "Difficulty ▾",
       judgeScore:       "Score",
@@ -1839,20 +1862,23 @@
     document.getElementById("becomeAdminBtn").textContent = L.becomeAdmin;
     // Config
     const cfgRows = document.querySelectorAll(".cfg-row");
-    if (cfgRows.length >= 3) {
-      cfgRows[0].querySelector("strong").textContent = L.cfgLargeLabel;
-      cfgRows[0].querySelector("span").textContent   = L.cfgLargeDesc;
-      cfgRows[1].querySelector("strong").textContent = L.cfgTinyLabel;
-      cfgRows[1].querySelector("span").textContent   = L.cfgTinyDesc;
-      cfgRows[2].querySelector("strong").textContent = L.cfgForceLabel;
-      cfgRows[2].querySelector("span").textContent   = L.cfgForceDesc;
+    if (cfgRows.length >= 4) {
+      cfgRows[0].querySelector("strong").textContent = L.cfgMediumLabel;
+      cfgRows[0].querySelector("span").textContent   = L.cfgMediumDesc;
+      cfgRows[1].querySelector("strong").textContent = L.cfgLargeLabel;
+      cfgRows[1].querySelector("span").textContent   = L.cfgLargeDesc;
+      cfgRows[2].querySelector("strong").textContent = L.cfgTinyLabel;
+      cfgRows[2].querySelector("span").textContent   = L.cfgTinyDesc;
+      cfgRows[3].querySelector("strong").textContent = L.cfgForceLabel;
+      cfgRows[3].querySelector("span").textContent   = L.cfgForceDesc;
     }
     const forceOpts = document.querySelectorAll("#cfg-force-model option");
-    if (forceOpts.length === 4) {
+    if (forceOpts.length === 5) {
       forceOpts[0].textContent = L.cfgForceAuto;
       forceOpts[1].textContent = L.cfgForceSmall;
-      forceOpts[2].textContent = L.cfgForceLarge;
-      forceOpts[3].textContent = L.cfgForceTiny;
+      forceOpts[2].textContent = L.cfgForceMedium;
+      forceOpts[3].textContent = L.cfgForceLarge;
+      forceOpts[4].textContent = L.cfgForceTiny;
     }
     document.querySelector(".save-btn").textContent = L.saveBtn;
     // Welcome screen (if visible)
@@ -1982,8 +2008,9 @@
         return `<tr>
           <td>${u.email || u.uid}</td>
           <td style="text-align:center;font-weight:600">${u.total}</td>
-          <td style="text-align:center;color:#0f6e56">${u.small}</td>
-          <td style="text-align:center;color:#b84423">${u.large}</td>
+          <td style="text-align:center;color:#0f6e56">${u.small || 0}</td>
+          <td style="text-align:center;color:#9a6700">${u.medium || 0}</td>
+          <td style="text-align:center;color:#b84423">${u.large || 0}</td>
           <td style="text-align:center">${fmtTok(u.input_tokens)}</td>
           <td style="text-align:center">${fmtTok(u.output_tokens)}</td>
           <td style="text-align:center;font-weight:600">${fmtTok(u.input_tokens + u.output_tokens)}</td>
@@ -1992,7 +2019,7 @@
       rows += `<tr style="background:#f9f5ff;font-weight:600">
         <td>${t("statsTotal")}</td>
         <td style="text-align:center">${totalReqs}</td>
-        <td colspan="2"></td>
+        <td colspan="3"></td>
         <td style="text-align:center">${fmtTok(totalIn)}</td>
         <td style="text-align:center">${fmtTok(totalOut)}</td>
         <td style="text-align:center">${fmtTok(totalIn+totalOut)}</td>
@@ -2019,7 +2046,8 @@
       });
       if (!res.ok) return;
       const cfg = await res.json();
-      document.getElementById("cfg-threshold-large").value = cfg.threshold_large ?? 6;
+      document.getElementById("cfg-threshold-medium").value = cfg.threshold_medium ?? 4;
+      document.getElementById("cfg-threshold-large").value = cfg.threshold_large ?? 7;
       document.getElementById("cfg-threshold-tiny").value  = cfg.threshold_tiny ?? "";
       document.getElementById("cfg-force-model").value     = cfg.force_model    ?? "";
     } catch (_) {}
@@ -2030,7 +2058,8 @@
     msgEl.textContent = "";
     const tinyVal  = document.getElementById("cfg-threshold-tiny").value;
     const payload  = {
-      threshold_large: parseFloat(document.getElementById("cfg-threshold-large").value) || 6.0,
+      threshold_medium: parseFloat(document.getElementById("cfg-threshold-medium").value) || 4.0,
+      threshold_large: parseFloat(document.getElementById("cfg-threshold-large").value) || 7.0,
       threshold_tiny:  tinyVal !== "" ? parseFloat(tinyVal) : null,
       force_model:     document.getElementById("cfg-force-model").value || null,
     };
