@@ -60,7 +60,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
 | 檔案 | 負責什麼 | 何時要改 |
 |---|---|---|
 | `litellm_config.yaml` | 定義 `judge-model` 與各級距候選模型 alias，例如 `cloud-small-claude` / `cloud-small-gemini` | 換供應商、換模型版本時 |
-| `router_backend/app.py` | 難度判斷邏輯（AI 判斷式 prompt）、任務累積分數的衰減速度 | 要調整路由準不準、想改判斷邏輯時 |
+| `router_backend/app.py` | 難度判斷邏輯（judge 的 AI 判斷式 prompt）、級距門檻與工具（搜尋）呼叫 | 要調整路由準不準、想改判斷邏輯時 |
 | `docker-compose.yml` | 服務怎麼啟動、port、環境變數 | 想用 Docker 部署時 |
 | `frontend/index.html` | 使用者介面 | 想改介面、改 BASE_URL 時 |
 
@@ -72,15 +72,15 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
 - **每個級距有多模型候選**：judge 會同時輸出 `route`（small / medium / large）與實際 `model`
   alias。若 judge 選到不存在或不屬於該級距的模型，後端會自動退回該級距第一個候選模型。
 - **管理員可強制級距或單一模型**：管理員面板的「強制模型」可以選 small / medium / large
-  候選池，也可以直接指定 `cloud-small-gemini`、`cloud-medium-claude` 等單一模型。
-- **任務累積難度（黏性路由）**：`app.py` 裡 `DECAY_PER_TURN = 0.45`，分數用
-  `max(本次正規化分數, 上一輪分數 - 衰減值)` 計算，不會因為單句話變簡單就立刻降級。
-- **AI 判斷式會帶上下文**：`model_classify()` 會把上一輪對話內容一起餵給判斷模型。
+  候選池，也可以直接指定 `cloud-small-gemini`、`cloud-medium-claude` 等單一模型（只影響管理員自己的對話）。
+- **每次訊息獨立評分**：目前採用純 judge 評分，每則訊息由 judge 依 `threshold_medium` /
+  `threshold_large`（可選 `threshold_tiny`）決定級距，沒有跨輪的黏性/衰減邏輯。
+- **AI 判斷式會帶上下文**：`model_classify()` 會把最近幾輪對話內容（`HISTORY_LIMIT`）一起餵給判斷模型。
 
 ## 5. 後續可以調整的參數
 
 - `threshold_medium` / `threshold_large`：路由門檻（0-10 分制），預設 4 分以上走中模型、7 分以上走大模型，建議上線後用真實 log 重新校準。
-- `DECAY_PER_TURN`：數字越小，黏性越強（越不容易降回小模型）。
+- `threshold_tiny`：選填，低於此分數改走開源小模型（`TINY_MODEL_ALIAS`，未設定時停用）。
 - Claude 回答模型目前對應為：`cloud-small-claude` = Haiku、`cloud-medium-claude` = Sonnet、`cloud-large-claude` = Opus。
 - Gemini 回答模型目前對應為：`cloud-small-gemini` = Flash-Lite、`cloud-medium-gemini` = Flash、`cloud-large-gemini` = Pro。
 - 各級距候選由 `SMALL_MODEL_ALIASES`、`MEDIUM_MODEL_ALIASES`、`LARGE_MODEL_ALIASES` 控制；
@@ -88,6 +88,8 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
 
 ## 6. 已知的簡化（正式上線前建議處理）
 
-- `_session_scores` 用記憶體字典存放，重啟後端會清空；多台後端水平擴展時請換成 Redis。
 - LiteLLM 的 `master_key` 寫在 `litellm_config.yaml` 裡只是 demo 用，正式環境請用環境變數帶入、加上虛擬金鑰做存取控制。
-- CORS 目前開放 `*`，正式環境請改成資訊中心內網的白名單網域。
+- CORS 預設仍是 `*`，正式環境請設定 `ALLOWED_ORIGINS` 環境變數（逗號分隔的白名單網域）收斂。
+- **前端只有一份正本 `frontend/index.html`**：Docker build context 已改為 repo 根目錄，
+  Dockerfile 會把 `frontend/index.html` 打包成映像內的 `index.html`，後端以 `FileResponse` serve。
+  （之前曾有 `router_backend/index.html` 副本容易忘記同步，現已移除。）

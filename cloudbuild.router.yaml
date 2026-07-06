@@ -6,6 +6,6 @@ steps:
       - router_backend/Dockerfile
       - -t
       - asia-east1-docker.pkg.dev/gen-lang-client-0302375476/cloud-run-source-deploy/ntpu-router:latest
-      - router_backend
+      - .   # build context = repo 根目錄，才拿得到 frontend/index.html
 images:
   - asia-east1-docker.pkg.dev/gen-lang-client-0302375476/cloud-run-source-deploy/ntpu-router:latest

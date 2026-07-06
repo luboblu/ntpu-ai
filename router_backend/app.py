@@ -12,7 +12,7 @@ from typing import Optional
 import uuid
 import secrets
 import httpx
-from fastapi import FastAPI, HTTPException, Header, UploadFile, File
+from fastapi import FastAPI, HTTPException, Header, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -98,7 +98,8 @@ else:
 # FastAPI
 # ------------------------------------------------------------------
 app = FastAPI(title="AI Router Backend")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+_cors_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()] or ["*"]
+app.add_middleware(CORSMiddleware, allow_origins=_cors_origins, allow_methods=["*"], allow_headers=["*"])
 
 
 class ChatRequest(BaseModel):
@@ -387,7 +388,7 @@ def _fs_log_usage(uid: str, email: str, session_id: str, route: str, score: floa
 
 def _fs_get_stats() -> list:
     cutoff = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(days=30)
-    docs = _db.collection("usage_logs").where("timestamp", ">=", cutoff).stream()
+    docs = _db.collection("usage_logs").where("timestamp", ">=", cutoff).limit(10000).stream()
     stats: dict = {}
     for doc in docs:
         d = doc.to_dict()
@@ -955,79 +956,25 @@ async def model_classify(client: httpx.AsyncClient, text: str, history: list) ->
 # ------------------------------------------------------------------
 # Chat API
 # ------------------------------------------------------------------
+# 唯一正本是 frontend/index.html。Docker build 會把它 COPY 到 app.py 旁邊（/app/index.html）；
+# 本機從 repo 直接跑時則往上一層找 frontend/index.html。
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_INDEX_CANDIDATES = [
+    os.path.join(_HERE, "index.html"),
+    os.path.join(_HERE, "..", "frontend", "index.html"),
+]
+
+
+def _index_html_path() -> str:
+    for p in _INDEX_CANDIDATES:
+        if os.path.exists(p):
+            return p
+    return _INDEX_CANDIDATES[0]
+
+
 @app.get("/")
 async def index():
-    return FileResponse("index.html")
-
-
-@app.post("/chat")
-async def chat(req: ChatRequest, authorization: Optional[str] = Header(None)):
-    decoded = await decode_token(authorization)
-    uid   = decoded.get("uid", "anonymous")
-    email = decoded.get("email", "")
-
-    history = await get_history(uid, req.session_id)
-    llm_history = [{"role": m["role"], "content": m["content"]} for m in history]
-    config = await get_routing_config()
-
-    async with httpx.AsyncClient() as client:
-        t0 = time.time()
-        judge = await model_classify(client, req.message, llm_history)
-        judge_elapsed_ms = int((time.time() - t0) * 1000)
-
-        # force_model 只對管理員帳號生效，一般使用者維持正常路由
-        force = config.get("force_model") if decoded.get("admin") else None
-        route, model_alias = _select_route(config, judge, force)
-        judge["route"] = route
-        judge["model"] = model_alias
-
-        judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})
-        sys_prompt = await get_user_system_prompt(uid)
-        user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
-        tools = _build_search_tools(req) if TAVILY_KEY else []
-        # 工具啟用時避免路由到不支援 function calling 的開源小模型
-        if tools and route == "tiny":
-            route, model_alias = "small", _default_model_for_route("small")
-        answer_messages = [{"role": "system", "content": build_system_prompt(sys_prompt, has_tools=bool(tools))}]
-        answer_messages += llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
-        t1 = time.time()
-        if tools:
-            answer, answer_usage = "", {"input_tokens": 0, "output_tokens": 0}
-            async for ev in run_tools(client, model_alias, answer_messages, tools):
-                if ev["type"] == "final":
-                    answer, answer_usage = ev["content"], ev["usage"]
-        else:
-            answer, answer_usage = await call_litellm(client, model_alias, answer_messages)
-        answer_elapsed_ms = int((time.time() - t1) * 1000)
-
-    total_input  = judge_usage["input_tokens"]  + answer_usage["input_tokens"]
-    total_output = judge_usage["output_tokens"] + answer_usage["output_tokens"]
-
-    user_entry: dict = {"role": "user", "content": req.message}
-    if req.file_name:
-        user_entry["_file_name"]      = req.file_name
-        user_entry["_file_mime_type"] = req.file_mime_type or ""
-        user_entry["_file_gcs_path"]  = req.file_gcs_path or ""
-    new_history = history + [
-        user_entry,
-        {"role": "assistant", "content": answer,
-         "_route": route, "_score": judge["score"], "_reason": judge.get("reason", "")},
-    ]
-    await save_history(uid, req.session_id, new_history)
-
-    if uid != "anonymous":
-        asyncio.create_task(asyncio.to_thread(
-            _fs_log_usage, uid, email, req.session_id, route, judge["score"], model_alias,
-            total_input, total_output,
-        ))
-
-    return {
-        "route": route, "model": model_alias, "judge": judge,
-        "session_score": judge["normalized"],
-        "judge_elapsed_ms": judge_elapsed_ms,
-        "answer_elapsed_ms": answer_elapsed_ms,
-        "answer": answer,
-    }
+    return FileResponse(_index_html_path())
 
 
 @app.post("/chat/stream")
@@ -1238,9 +1185,37 @@ async def get_shared_conversation(share_id: str):
 # ------------------------------------------------------------------
 # Admin API
 # ------------------------------------------------------------------
+def _any_admin_exists() -> bool:
+    """掃描 Firebase Auth，判斷系統是否已有任何管理員。
+    用來擋掉「flag 機制上線前就已設定管理員」的既有部署被新使用者搶權。"""
+    page = fb_auth.list_users()
+    while page:
+        for u in page.users:
+            if u.custom_claims and u.custom_claims.get("admin"):
+                return True
+        page = page.get_next_page()
+    return False
+
+
+def _try_claim_first_admin(uid: str) -> bool:
+    """Firestore 交易：若 first_admin_flag 尚不存在，原子地建立並回傳 True；已存在則回傳 False。"""
+    flag_ref = _db.collection("config").document("first_admin_flag")
+
+    @fb_firestore.transactional
+    def _run(tx):
+        snap = flag_ref.get(transaction=tx)
+        if snap.exists:
+            return False
+        tx.set(flag_ref, {"uid": uid, "claimed_at": fb_firestore.SERVER_TIMESTAMP})
+        return True
+
+    return _run(_db.transaction())
+
+
 @app.post("/admin/setup")
 async def admin_setup(authorization: Optional[str] = Header(None)):
-    """第一次使用：若系統中無管理員，授予請求者管理員權限"""
+    """第一次使用：若系統中無管理員，授予請求者管理員權限。
+    先用 Auth 掃描擋掉既有管理員，再用 Firestore 交易防止兩個「首次」請求同時搶權（TOCTOU 防護）。"""
     if not _firebase_ready:
         raise HTTPException(status_code=503)
     decoded = await decode_token(authorization)
@@ -1248,18 +1223,12 @@ async def admin_setup(authorization: Optional[str] = Header(None)):
     if not uid or uid == "anonymous":
         raise HTTPException(status_code=401)
 
-    has_admin = False
-    page = fb_auth.list_users()
-    while page:
-        for u in page.users:
-            if u.custom_claims and u.custom_claims.get("admin"):
-                has_admin = True
-                break
-        if has_admin:
-            break
-        page = page.get_next_page()
+    # 既有部署可能在此 flag 機制上線前就已有管理員，需先擋掉
+    if await asyncio.to_thread(_any_admin_exists):
+        raise HTTPException(status_code=403, detail="管理員已存在，請聯絡現有管理員授權")
 
-    if has_admin:
+    claimed = await asyncio.to_thread(_try_claim_first_admin, uid)
+    if not claimed:
         raise HTTPException(status_code=403, detail="管理員已存在，請聯絡現有管理員授權")
 
     await asyncio.to_thread(fb_auth.set_custom_user_claims, uid, {"admin": True})
@@ -1361,6 +1330,7 @@ async def upload_file(
 @app.post("/transcribe")
 async def transcribe_audio(
     file: UploadFile = File(...),
+    lang: str = Form("zh"),
     authorization: Optional[str] = Header(None),
 ):
     await decode_token(authorization)
@@ -1371,10 +1341,11 @@ async def transcribe_audio(
         raise HTTPException(status_code=413, detail="音檔過大（上限 25 MB）")
     from openai import AsyncOpenAI
     client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+    lang_code = "zh" if lang.startswith("zh") else "en"
     transcript = await client.audio.transcriptions.create(
         model="whisper-1",
         file=(file.filename or "audio.webm", audio_bytes, file.content_type or "audio/webm"),
-        language="zh",
+        language=lang_code,
     )
     return {"text": transcript.text}
 
