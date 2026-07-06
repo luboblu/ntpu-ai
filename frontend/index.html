@@ -1694,6 +1694,8 @@
       statsRangeYesterday: "昨天",
       statsRange7d:        "近 7 天",
       statsRange30d:       "近 30 天",
+      statsByModelTitle:   "依模型 Token 用量（乘上各家單價即可估算成本）",
+      statsByModelCols:    ["模型","呼叫次數","輸入 Token","輸出 Token","總 Token"],
       usersEmpty:       "無使用者",
       usersSelf:        "(你)",
       usersAdminBadge:  "管理員",
@@ -1823,6 +1825,8 @@
       statsRangeYesterday: "Yesterday",
       statsRange7d:        "Last 7 days",
       statsRange30d:       "Last 30 days",
+      statsByModelTitle:   "Token usage by model (multiply by each vendor's price to estimate cost)",
+      statsByModelCols:    ["Model","Calls","Input Tokens","Output Tokens","Total Tokens"],
       usersEmpty:       "No users",
       usersSelf:        "(you)",
       usersAdminBadge:  "Admin",
@@ -2096,13 +2100,15 @@
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
-      if (!data.length) {
+      const users = data.users || [];
+      const byModel = data.by_model || [];
+      if (!users.length) {
         el.innerHTML = `<div class="a-notice">${t("statsEmpty")}</div>`; return;
       }
       const fmtTok = n => n >= 1000000 ? (n/1000000).toFixed(2)+"M" : n >= 1000 ? (n/1000).toFixed(1)+"K" : String(n);
       const cols = t("statsCols");
       let totalReqs = 0, totalConvs = 0, totalIn = 0, totalOut = 0;
-      let rows = data.map(u => {
+      let rows = users.map(u => {
         totalReqs += u.total; totalConvs += (u.conversations || 0);
         totalIn += u.input_tokens; totalOut += u.output_tokens;
         return `<tr>
@@ -2126,6 +2132,38 @@
         <td style="text-align:center">${fmtTok(totalOut)}</td>
         <td style="text-align:center">${fmtTok(totalIn+totalOut)}</td>
       </tr>`;
+      // ── 依模型分列 Token（估算成本用）──
+      const mCols = t("statsByModelCols");
+      let mIn = 0, mOut = 0;
+      let modelRows = byModel.map(m => {
+        mIn += m.input_tokens; mOut += m.output_tokens;
+        const name = m.model === "judge-model" ? "Judge · Gemini 2.5 Flash" : _modelFullName(m.model);
+        return `<tr>
+          <td>${name}</td>
+          <td style="text-align:center">${m.requests || 0}</td>
+          <td style="text-align:center">${fmtTok(m.input_tokens)}</td>
+          <td style="text-align:center">${fmtTok(m.output_tokens)}</td>
+          <td style="text-align:center;font-weight:600">${fmtTok(m.input_tokens + m.output_tokens)}</td>
+        </tr>`;
+      }).join("");
+      if (byModel.length) {
+        modelRows += `<tr style="background:#f9f5ff;font-weight:600">
+          <td>${t("statsTotal")}</td>
+          <td></td>
+          <td style="text-align:center">${fmtTok(mIn)}</td>
+          <td style="text-align:center">${fmtTok(mOut)}</td>
+          <td style="text-align:center">${fmtTok(mIn+mOut)}</td>
+        </tr>`;
+      }
+      const modelTable = byModel.length ? `
+        <p style="font-size:13px;font-weight:600;color:var(--text2);margin:22px 0 8px">${t("statsByModelTitle")}</p>
+        <table class="a-table">
+          <thead><tr>
+            ${mCols.map((c,i) => `<th${i>0?' style="text-align:center"':''}>${c}</th>`).join("")}
+          </tr></thead>
+          <tbody>${modelRows}</tbody>
+        </table>` : "";
+
       el.innerHTML = `
         <p style="font-size:12px;color:#aaa;margin-bottom:12px">${t("statsRange")}</p>
         <table class="a-table">
@@ -2133,7 +2171,8 @@
             ${cols.map((c,i) => `<th${i>0?' style="text-align:center"':''}>${c}</th>`).join("")}
           </tr></thead>
           <tbody>${rows}</tbody>
-        </table>`;
+        </table>
+        ${modelTable}`;
     } catch (e) {
       el.innerHTML = `<div class="a-notice" style="color:#dc2626">${t("loadingFail")}${e.message}</div>`;
     }

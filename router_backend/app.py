@@ -378,16 +378,25 @@ def _fs_get_session_data(uid: str, session_id: str) -> dict:
 
 
 def _fs_log_usage(uid: str, email: str, session_id: str, route: str, score: float,
-                  model: str, input_tokens: int = 0, output_tokens: int = 0):
+                  model: str, input_tokens: int = 0, output_tokens: int = 0,
+                  judge_model: str = "", judge_input_tokens: int = 0, judge_output_tokens: int = 0,
+                  answer_input_tokens: int = 0, answer_output_tokens: int = 0):
     _db.collection("usage_logs").add({
         "uid": uid, "email": email, "session_id": session_id,
         "route": route, "score": score, "model": model,
+        # input_tokens/output_tokens 為 judge+回答加總（維持舊版相容的每人統計）
         "input_tokens": input_tokens, "output_tokens": output_tokens,
+        # 分開記錄，才能精準做「依模型」計價
+        "judge_model": judge_model,
+        "judge_input_tokens": judge_input_tokens,
+        "judge_output_tokens": judge_output_tokens,
+        "answer_input_tokens": answer_input_tokens,
+        "answer_output_tokens": answer_output_tokens,
         "timestamp": fb_firestore.SERVER_TIMESTAMP,
     })
 
 
-def _fs_get_stats(start_dt: datetime.datetime, end_dt: datetime.datetime) -> list:
+def _fs_get_stats(start_dt: datetime.datetime, end_dt: datetime.datetime) -> dict:
     docs = (
         _db.collection("usage_logs")
         .where("timestamp", ">=", start_dt)
@@ -395,7 +404,17 @@ def _fs_get_stats(start_dt: datetime.datetime, end_dt: datetime.datetime) -> lis
         .limit(20000).stream()
     )
     stats: dict = {}
-    sessions: dict = {}  # uid -> set(session_id)，用來算「對話數」（不重複的 session）
+    sessions: dict = {}   # uid -> set(session_id)，用來算「對話數」（不重複的 session）
+    by_model: dict = {}   # model alias -> {input, output, requests}
+
+    def _add_model(alias: str, inp: int, out: int):
+        if not alias:
+            return
+        b = by_model.setdefault(alias, {"model": alias, "input_tokens": 0, "output_tokens": 0, "requests": 0})
+        b["input_tokens"]  += inp
+        b["output_tokens"] += out
+        b["requests"]      += 1
+
     for doc in docs:
         d = doc.to_dict()
         uid = d.get("uid", "?")
@@ -416,9 +435,21 @@ def _fs_get_stats(start_dt: datetime.datetime, end_dt: datetime.datetime) -> lis
             stats[uid][route] += 1
         stats[uid]["input_tokens"]  += d.get("input_tokens", 0)
         stats[uid]["output_tokens"] += d.get("output_tokens", 0)
+
+        # 依模型分列：新版 log 有拆開 judge / 回答的 token，舊版則整筆歸給回答模型
+        if "answer_input_tokens" in d or "judge_model" in d:
+            _add_model(d.get("judge_model", ""), d.get("judge_input_tokens", 0), d.get("judge_output_tokens", 0))
+            _add_model(d.get("model", ""), d.get("answer_input_tokens", 0), d.get("answer_output_tokens", 0))
+        else:
+            _add_model(d.get("model", ""), d.get("input_tokens", 0), d.get("output_tokens", 0))
+
     for uid, s in stats.items():
         s["conversations"] = len(sessions[uid])
-    return sorted(stats.values(), key=lambda x: x["total"], reverse=True)
+
+    users = sorted(stats.values(), key=lambda x: x["total"], reverse=True)
+    models = sorted(by_model.values(),
+                    key=lambda x: x["input_tokens"] + x["output_tokens"], reverse=True)
+    return {"users": users, "by_model": models}
 
 
 def _fs_list_auth_users() -> list:
@@ -1100,6 +1131,8 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
                     asyncio.create_task(asyncio.to_thread(
                         _fs_log_usage, uid, email, req.session_id, route, judge["score"], model_alias,
                         total_input, total_output,
+                        JUDGE_MODEL_ALIAS, judge_usage["input_tokens"], judge_usage["output_tokens"],
+                        answer_input_tokens, answer_output_tokens,
                     ))
 
         except Exception as e:
