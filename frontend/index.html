@@ -766,7 +766,7 @@
             <option value="cloud-large-claude">Opus（大模型）</option>
             <option value="cloud-large-gemini">Gemini Pro（大模型）</option>
             <option value="cloud-large-r1">DeepSeek R1（大模型）</option>
-            <option value="tiny">開源小模型：Llama 3.2 3B（免費）</option>
+            <option value="tiny">強制開源小模型</option>
           </select>
         </div>
         <button class="save-btn" onclick="saveConfig()">儲存設定</button>
@@ -1261,7 +1261,6 @@
     "cloud-large-claude":  { cls: "large",  short: "Opus",              full: "Claude Opus 4.8" },
     "cloud-large-gemini":  { cls: "large",  short: "Gemini Pro",        full: "Gemini 2.5 Pro" },
     "cloud-large-r1":      { cls: "large",  short: "DeepSeek R1",       full: "DeepSeek R1 (OpenRouter)" },
-    "cloud-tiny-llama":    { cls: "tiny",   short: "Llama 3.2 3B",      full: "Llama 3.2 3B (OpenRouter 免費)" },
   };
 
   function _modelBadge(route, model) {
@@ -1695,7 +1694,7 @@
       cfgForceLargeClaude:  "Opus（大模型）",
       cfgForceLargeGemini:  "Gemini Pro（大模型）",
       cfgForceLargeR1:      "DeepSeek R1（大模型）",
-      cfgForceTiny:     "開源小模型：Llama 3.2 3B（免費）",
+      cfgForceTiny:     "強制開源小模型",
       saveBtn:          "儲存設定",
       cfgSaved:         "✓ 設定已儲存，約 30 秒後生效",
       statsRange:       "Token 量含 judge 模型消耗，可用於估算成本",
@@ -1830,7 +1829,7 @@
       cfgForceLargeClaude:  "Opus (large)",
       cfgForceLargeGemini:  "Gemini Pro (large)",
       cfgForceLargeR1:      "DeepSeek R1 (large)",
-      cfgForceTiny:     "Open-source: Llama 3.2 3B (free)",
+      cfgForceTiny:     "Force open-source model",
       saveBtn:          "Save Settings",
       cfgSaved:         "✓ Settings saved. Takes effect in ~30 seconds.",
       statsRange:       "Token counts include judge model usage — use for cost estimation",

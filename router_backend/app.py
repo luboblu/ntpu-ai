@@ -61,7 +61,6 @@ MODEL_NOTES = {
     "cloud-large-claude": "Claude Opus 4.8：高品質深度推理、長任務與複雜 coding",
     "cloud-large-gemini": "Gemini 2.5 Pro：深度推理與 coding，適合複雜任務",
     "cloud-large-r1": "DeepSeek R1（OpenRouter）：強推理模型、成本低，適合數學證明與多步推理（不擅長工具呼叫）",
-    "cloud-tiny-llama": "Llama 3.2 3B（OpenRouter 免費）：極小極省，僅適合最簡單的閒聊與短問答（有速率限制、不支援工具）",
 }
 
 MODEL_TO_ROUTE = {
