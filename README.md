@@ -1,4 +1,4 @@
-# AI 路由系統 — 前端 + 路由後端 + LiteLLM（目前先全部走雲端）
+# AI 路由系統 — 前端 + 路由後端 + LiteLLM（目前走雲端，地端通道已預留）
 
 ```
 瀏覽器（frontend/index.html）
@@ -11,19 +11,46 @@ LiteLLM Proxy（OpenAI 相容介面）
    ├── judge-model  → 雲端，專門判斷難度
    ├── cloud-small-*  → 雲端小模型候選，負責簡單任務的回答
    ├── cloud-medium-* → 雲端中模型候選，負責中等任務的回答
-   └── cloud-large-*  → 雲端大模型候選，負責困難任務的回答
+   ├── cloud-large-*  → 雲端大模型候選，負責困難任務的回答
+   └── local-*        → 地端模型（Ollama / vLLM），通道已預留、暫未啟用
 ```
 
-地端開源模型（Ollama／vLLM）先不接，之後資料隱私需求確定後再加進來，
-到時只要在 `litellm_config.yaml` 多加一個 model_name、在 `app.py` 多一個路由判斷分支即可；
-目前雲端回答模型已經有 small / medium / large 三層，
-不需要動前端跟其他邏輯。
+## 1. 後端程式架構（router_backend/）
 
-## 1. 啟動方式（原生安裝，不使用 Docker）
+單一巨大 `app.py` 已拆成職責清楚的模組，`app.py` 只留 FastAPI 組裝與 API 端點：
+
+| 模組 | 職責 |
+|---|---|
+| `config.py` | 所有環境變數與模型 alias 設定的唯一入口 |
+| `schemas.py` | API 請求的 Pydantic 資料模型（含長度驗證） |
+| `security.py` | Firebase token 驗證、NTPU 網域限制、速率限制、安全回應標頭 |
+| `store.py` | Firebase Auth / Firestore / GCS 存取（同步呼叫都包成 async） |
+| `prompts.py` | 系統提示與 judge 提示 |
+| `routing.py` | 難度判斷（judge）、級距與模型選擇、地端優先邏輯 |
+| `llm.py` | LiteLLM 呼叫封裝（一般／串流／tool-calling 迴圈） |
+| `tools.py` | 搜尋工具（Tavily 網路／校內搜尋、北大官網抓取） |
+| `attachments.py` | 附件解析（文字、Office、圖片/PDF 轉 base64） |
+| `app.py` | FastAPI app 組裝與所有 API 端點 |
+
+## 2. 地端模型通道（已預留）
+
+alias 以 `local-` 開頭即被視為地端模型。之後接 Ollama / vLLM 時：
+
+1. 在 `litellm_config.yaml` 取消「地端模型通道」區塊的註解（已附 Ollama 與 vLLM 範例），
+   設定 `OLLAMA_BASE_URL` 或 `VLLM_BASE_URL`。
+2. 在 router 後端環境變數填入對應級距的 alias，例如
+   `LOCAL_SMALL_MODEL_ALIASES=local-small-llama`。
+3. 管理員面板（或 `POST /admin/config`）開啟 `prefer_local`，
+   該級距有地端候選時就會優先走地端，資料不出機房。
+
+前端與其餘路由邏輯完全不用動。
+
+## 3. 啟動方式（原生安裝，不使用 Docker）
 
 ```bash
 # 1) LiteLLM Proxy
 pip install 'litellm[proxy]'
+export LITELLM_MASTER_KEY=$(python3 -c "import secrets; print('sk-'+secrets.token_urlsafe(24))")
 export ANTHROPIC_API_KEY=sk-ant-xxxxx      # 換成你自己的金鑰
 export GEMINI_API_KEY=xxxxx                # judge-model 仍使用 Gemini 時需要
 litellm --config litellm_config.yaml --port 4000 &
@@ -32,7 +59,7 @@ litellm --config litellm_config.yaml --port 4000 &
 cd router_backend
 pip install -r requirements.txt
 export LITELLM_BASE_URL=http://localhost:4000
-export LITELLM_MASTER_KEY=sk-1234
+# LITELLM_MASTER_KEY 沿用上面 export 的值
 uvicorn app:app --host 0.0.0.0 --port 8000 &
 ```
 
@@ -43,11 +70,11 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
 
 確認後端活著：`curl http://localhost:8000/health`，回 `{"status":"ok"}` 就代表正常。
 
-> 也可以用 Docker：`docker-compose.yml` 跟 `router_backend/Dockerfile` 都還在，
-> 直接 `docker compose up -d --build` 即可，不需要額外改設定
-> （這個版本已經不需要 Ollama，所以 compose 檔裡也拿掉了那個服務）。
+> 也可以用 Docker：先在 repo 根目錄建立 `.env`（至少要有 `LITELLM_MASTER_KEY`），
+> 再 `docker compose up -d --build`。compose 已改成金鑰一律從 `.env` 帶入，
+> 沒設定會直接啟動失敗，避免用預設金鑰上線。
 
-## 2. 開啟前端
+## 4. 開啟前端
 
 `frontend/index.html` 是純 HTML/JS，不需要任何打包工具：
 
@@ -55,16 +82,17 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
 - 正式給同事使用：把這個檔案放到任何靜態網頁伺服器（nginx、或最簡單用 `python3 -m http.server 8080`）。
 - 記得把 `index.html` 裡的 `BASE_URL` 改成路由後端實際的網址。
 
-## 3. 設定檔對照
+## 5. 設定檔對照
 
 | 檔案 | 負責什麼 | 何時要改 |
 |---|---|---|
-| `litellm_config.yaml` | 定義 `judge-model` 與各級距候選模型 alias，例如 `cloud-small-claude` / `cloud-small-gemini` | 換供應商、換模型版本時 |
-| `router_backend/app.py` | 難度判斷邏輯（judge 的 AI 判斷式 prompt）、級距門檻與工具（搜尋）呼叫 | 要調整路由準不準、想改判斷邏輯時 |
+| `litellm_config.yaml` | 定義 `judge-model`、各級距候選與地端模型 alias | 換供應商、換模型版本、接地端模型時 |
+| `router_backend/config.py` | 所有環境變數的預設值與模型清單 | 加新模型 alias、調限制參數時 |
+| `router_backend/routing.py` | 難度判斷與級距選擇邏輯 | 要調整路由準不準、想改判斷邏輯時 |
 | `docker-compose.yml` | 服務怎麼啟動、port、環境變數 | 想用 Docker 部署時 |
 | `frontend/index.html` | 使用者介面 | 想改介面、改 BASE_URL 時 |
 
-## 4. 模型角色的設計理由
+## 6. 模型角色的設計理由
 
 - **judge-model 跟負責回答的模型分開**：判斷難度用一個便宜模型專門做這件事，跟實際回答的
   `cloud-small-*` / `cloud-medium-*` / `cloud-large-*` 候選模型互相獨立，之後想單獨換掉判斷邏輯（例如換成自己訓練的分類器）
@@ -77,19 +105,36 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
   `threshold_large`（可選 `threshold_tiny`）決定級距，沒有跨輪的黏性/衰減邏輯。
 - **AI 判斷式會帶上下文**：`model_classify()` 會把最近幾輪對話內容（`HISTORY_LIMIT`）一起餵給判斷模型。
 
-## 5. 後續可以調整的參數
+## 7. 安全設計
+
+- **金鑰不落地**：LiteLLM `master_key` 改由 `LITELLM_MASTER_KEY` 環境變數帶入，
+  設定檔與 repo 裡不再有金鑰；docker-compose 未設定金鑰會直接啟動失敗。
+- **登入與網域限制**：Firebase ID token 驗證，非管理員一律限制 `@gm.ntpu.edu.tw` / `@ms.ntpu.edu.tw`；
+  首位管理員以 Firestore 交易防止搶權（TOCTOU 防護）。
+- **速率限制**：`/chat/stream` 與 `/upload`、`/transcribe` 有每人每分鐘的滑動視窗限制
+  （`CHAT_RATE_LIMIT_PER_MINUTE`、`UPLOAD_RATE_LIMIT_PER_MINUTE`，設 0 停用）。
+  目前是單機記憶體版，之後跑多個 instance 要改集中式（例如 Redis）。
+- **錯誤訊息不外洩**：串流錯誤與檔案讀取失敗只回一般化訊息，詳細堆疊留在 server log。
+- **輸入驗證**：訊息長度上限 10 萬字、上傳 20MB／音檔 25MB、上傳副檔名只允許英數字、
+  檔案預覽只能讀自己 `uploads/{uid}/` 底下的檔案、`fetch_ntpu_page` 只接受 ntpu.edu.tw 網域（SSRF 防護）。
+- **安全回應標頭**：`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`。
+- **容器強化**：後端映像升級為 `python:3.12-slim`，並以非 root 使用者執行。
+- **CORS**：預設 `*` 會在啟動時警告；正式環境請設定 `ALLOWED_ORIGINS`（逗號分隔白名單）。
+
+## 8. 後續可以調整的參數
 
 - `threshold_medium` / `threshold_large`：路由門檻（0-10 分制），預設 4 分以上走中模型、7 分以上走大模型，建議上線後用真實 log 重新校準。
 - `threshold_tiny`：選填，低於此分數改走開源小模型（`TINY_MODEL_ALIAS`，未設定時停用）。
+- `prefer_local`：地端優先開關（需先設定 `LOCAL_*_MODEL_ALIASES`）。
 - Claude 回答模型目前對應為：`cloud-small-claude` = Haiku、`cloud-medium-claude` = Sonnet、`cloud-large-claude` = Opus。
 - Gemini 回答模型目前對應為：`cloud-small-gemini` = Flash-Lite、`cloud-medium-gemini` = Flash、`cloud-large-gemini` = Pro。
-- 各級距候選由 `SMALL_MODEL_ALIASES`、`MEDIUM_MODEL_ALIASES`、`LARGE_MODEL_ALIASES` 控制；
+- 各級距候選由 `SMALL_MODEL_ALIASES`、`MEDIUM_MODEL_ALIASES`、`LARGE_MODEL_ALIASES`
+  （地端為 `LOCAL_*_MODEL_ALIASES`）控制；
   例如要加 OpenAI，只要在 `litellm_config.yaml` 新增 `cloud-small-openai`，再把它加入 `SMALL_MODEL_ALIASES`。
 
-## 6. 已知的簡化（正式上線前建議處理）
+## 9. 已知的簡化（正式上線前建議處理）
 
-- LiteLLM 的 `master_key` 寫在 `litellm_config.yaml` 裡只是 demo 用，正式環境請用環境變數帶入、加上虛擬金鑰做存取控制。
-- CORS 預設仍是 `*`，正式環境請設定 `ALLOWED_ORIGINS` 環境變數（逗號分隔的白名單網域）收斂。
+- 速率限制是單機記憶體版，多 instance 部署時需換成 Redis 等集中式方案。
+- LiteLLM 只用 master key 一把金鑰；若要細緻的存取控制，可改用 LiteLLM 虛擬金鑰。
 - **前端只有一份正本 `frontend/index.html`**：Docker build context 已改為 repo 根目錄，
   Dockerfile 會把 `frontend/index.html` 打包成映像內的 `index.html`，後端以 `FileResponse` serve。
-  （之前曾有 `router_backend/index.html` 副本容易忘記同步，現已移除。）

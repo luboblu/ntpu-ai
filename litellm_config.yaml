@@ -1,10 +1,11 @@
-# LiteLLM 設定檔（目前先全部走雲端，不接地端模型）
+# LiteLLM 設定檔（目前先全部走雲端，地端通道已預留、暫未啟用）
 #
 # 每個級距都可以有多個候選模型 alias，router 後端會讓 judge 在候選裡挑：
 #   judge-model  → 專門用來「判斷難度」
 #   cloud-small-*  → 難度低時，負責回答的雲端小模型
 #   cloud-medium-* → 難度中等時，負責回答的雲端中模型
 #   cloud-large-*  → 難度高時，負責回答的雲端大模型
+#   local-*        → 地端模型（Ollama / vLLM），alias 以 local- 開頭即會被後端視為地端
 #
 # 之後要把某個級距新增別的供應商（例如加一個 cloud-small-openai），
 # 只要在這裡新增 model_name，並把對應的 *_MODEL_ALIASES 環境變數加上該 alias。
@@ -79,8 +80,26 @@ model_list:
   #     model: gpt-4o-mini
   #     api_key: os.environ/OPENAI_API_KEY
 
+  # ── 地端模型通道（預留，資料隱私需求確定後再啟用）──
+  # 啟用步驟：
+  #   1. 起 Ollama（或 vLLM）服務，拉好模型
+  #   2. 取消下面其中一段註解、改成實際的模型與位址
+  #   3. 在 router 後端設定 LOCAL_SMALL_MODEL_ALIASES=local-small-llama（依級距對應）
+  #   4. 管理員面板開啟 prefer_local，該級距就會優先走地端
+  #
+  # - model_name: local-small-llama          # Ollama 範例
+  #   litellm_params:
+  #     model: ollama_chat/llama3.2
+  #     api_base: os.environ/OLLAMA_BASE_URL  # 例如 http://ollama:11434
+  #
+  # - model_name: local-medium-qwen          # vLLM（OpenAI 相容介面）範例
+  #   litellm_params:
+  #     model: hosted_vllm/Qwen/Qwen2.5-14B-Instruct
+  #     api_base: os.environ/VLLM_BASE_URL    # 例如 http://vllm:8000/v1
+
 general_settings:
-  master_key: sk-1234   # demo 用，正式環境請換成自己產生的金鑰，並用環境變數帶入、不要寫在檔案裡
+  # 金鑰一律由環境變數帶入，不要寫死在設定檔（本機開發可 export LITELLM_MASTER_KEY=sk-1234）
+  master_key: os.environ/LITELLM_MASTER_KEY
 
 litellm_settings:
   drop_params: true     # 不同供應商支援的參數不一樣，多餘的參數直接丟棄而不是報錯

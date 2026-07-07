@@ -9,8 +9,14 @@ services:
       - ./litellm_config.yaml:/app/config.yaml
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     environment:
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:?請在 .env 設定 LITELLM_MASTER_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - NVIDIA_NIM_API_KEY=${NVIDIA_NIM_API_KEY:-}
+      # 地端模型通道（啟用時取消 litellm_config.yaml 對應區塊的註解）
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      - VLLM_BASE_URL=${VLLM_BASE_URL:-}
 
   router-backend:
     build:
@@ -22,11 +28,15 @@ services:
       - "8000:8000"
     environment:
       - LITELLM_BASE_URL=http://litellm:4000
-      - LITELLM_MASTER_KEY=sk-1234
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:?請在 .env 設定 LITELLM_MASTER_KEY}
       - JUDGE_MODEL_ALIAS=judge-model
       - SMALL_MODEL_ALIASES=cloud-small-claude,cloud-small-gemini
       - MEDIUM_MODEL_ALIASES=cloud-medium-claude,cloud-medium-gemini
       - LARGE_MODEL_ALIASES=cloud-large-claude,cloud-large-gemini
+      # 地端模型 alias（選填；接上 Ollama/vLLM 後填入，例如 local-small-llama）
+      - LOCAL_SMALL_MODEL_ALIASES=${LOCAL_SMALL_MODEL_ALIASES:-}
+      - LOCAL_MEDIUM_MODEL_ALIASES=${LOCAL_MEDIUM_MODEL_ALIASES:-}
+      - LOCAL_LARGE_MODEL_ALIASES=${LOCAL_LARGE_MODEL_ALIASES:-}
       # 以下為選填；未設定時後端會降級（無 Firebase → 匿名、無金鑰 → 停用對應功能）
       - TINY_MODEL_ALIAS=${TINY_MODEL_ALIAS:-}
       - GCS_BUCKET=${GCS_BUCKET:-ntpu-ai-uploads}
@@ -34,3 +44,6 @@ services:
       - TAVILY_API_KEY=${TAVILY_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      # 速率限制（每人每分鐘；0 = 停用）
+      - CHAT_RATE_LIMIT_PER_MINUTE=${CHAT_RATE_LIMIT_PER_MINUTE:-20}
+      - UPLOAD_RATE_LIMIT_PER_MINUTE=${UPLOAD_RATE_LIMIT_PER_MINUTE:-10}
