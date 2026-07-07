@@ -10,26 +10,41 @@ from tools import run_search_tool
 logger = logging.getLogger("router.llm")
 
 _AUTH_HEADERS = {"Authorization": f"Bearer {LITELLM_API_KEY}"}
+_COMPLETIONS_URL = f"{LITELLM_BASE_URL}/v1/chat/completions"
 STREAM_TIMEOUT = httpx.Timeout(connect=30, read=300, write=30, pool=10)
+
+
+async def _chat_completion(client: httpx.AsyncClient, payload: dict) -> dict:
+    """非串流 chat completion，回傳解析後的 JSON。"""
+    resp = await client.post(_COMPLETIONS_URL, headers=_AUTH_HEADERS,
+                             json=payload, timeout=120)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _usage_of(data: dict) -> tuple[int, int]:
+    usage = data.get("usage", {})
+    return usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
+
+
+def _message_text(msg: dict) -> str:
+    """取出訊息文字；部分推理模型把輸出放在 reasoning_content。"""
+    content = msg.get("content")
+    if content is None:
+        content = msg.get("reasoning_content") or ""
+    return content
 
 
 async def call_litellm(client: httpx.AsyncClient, model_alias: str, messages: list,
                        max_tokens: int = MAX_ANSWER_TOKENS) -> tuple[str, dict]:
     """非串流呼叫，回傳 (content, usage)。"""
-    resp = await client.post(
-        f"{LITELLM_BASE_URL}/v1/chat/completions",
-        headers=_AUTH_HEADERS,
-        json={"model": model_alias, "messages": messages, "max_tokens": max_tokens},
-        timeout=120,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
-    if content is None:
-        content = data["choices"][0]["message"].get("reasoning_content") or ""
-    usage = data.get("usage", {})
-    return content, {"input_tokens": usage.get("prompt_tokens", 0),
-                     "output_tokens": usage.get("completion_tokens", 0)}
+    data = await _chat_completion(client, {
+        "model": model_alias, "messages": messages, "max_tokens": max_tokens,
+    })
+    input_tokens, output_tokens = _usage_of(data)
+    return _message_text(data["choices"][0]["message"]), {
+        "input_tokens": input_tokens, "output_tokens": output_tokens,
+    }
 
 
 def stream_litellm(client: httpx.AsyncClient, model_alias: str, messages: list,
@@ -37,7 +52,7 @@ def stream_litellm(client: httpx.AsyncClient, model_alias: str, messages: list,
     """回傳可 async with 的串流 request（SSE），由呼叫端解析 chunk。"""
     return client.stream(
         "POST",
-        f"{LITELLM_BASE_URL}/v1/chat/completions",
+        _COMPLETIONS_URL,
         headers=_AUTH_HEADERS,
         json={"model": model_alias, "messages": messages, "max_tokens": max_tokens,
               "stream": True, "stream_options": {"include_usage": True}},
@@ -55,19 +70,14 @@ async def run_tools(client: httpx.AsyncClient, model_alias: str, messages: list,
     """
     total_in = total_out = 0
     for _ in range(max_iters):
-        resp = await client.post(
-            f"{LITELLM_BASE_URL}/v1/chat/completions",
-            headers=_AUTH_HEADERS,
-            json={"model": model_alias, "messages": messages,
-                  "max_tokens": max_tokens, "tools": tools},
-            timeout=120,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        data = await _chat_completion(client, {
+            "model": model_alias, "messages": messages,
+            "max_tokens": max_tokens, "tools": tools,
+        })
         msg = data["choices"][0]["message"]
-        usage = data.get("usage", {})
-        total_in  += usage.get("prompt_tokens", 0)
-        total_out += usage.get("completion_tokens", 0)
+        input_tokens, output_tokens = _usage_of(data)
+        total_in  += input_tokens
+        total_out += output_tokens
 
         if msg.get("tool_calls"):
             messages.append(msg)
@@ -86,10 +96,7 @@ async def run_tools(client: httpx.AsyncClient, model_alias: str, messages: list,
                 messages.append({"role": "tool", "tool_call_id": tc.get("id"), "content": result})
             continue
 
-        content = msg.get("content")
-        if content is None:
-            content = msg.get("reasoning_content") or ""
-        yield {"type": "final", "content": content,
+        yield {"type": "final", "content": _message_text(msg),
                "usage": {"input_tokens": total_in, "output_tokens": total_out}}
         return
 

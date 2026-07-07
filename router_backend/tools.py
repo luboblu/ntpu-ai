@@ -197,6 +197,9 @@ async def _fetch_ntpu(url: str) -> str:
             final_url = str(resp.url)
     except Exception:
         return f"（無法開啟該頁面：{url}）"
+    # 跟隨轉址後再驗證一次，避免北大頁面轉址到外部網站造成 SSRF
+    if not _is_ntpu_url(final_url):
+        return "（該頁面轉址到北大以外的網站，已停止讀取）"
     text = _html_to_text(raw)
     if len(text) < 40:
         return f"（該頁面沒有可讀取的文字內容，可能需要瀏覽器才能顯示：{final_url}）"

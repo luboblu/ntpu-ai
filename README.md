@@ -28,9 +28,13 @@ LiteLLM Proxy（OpenAI 相容介面）
 | `prompts.py` | 系統提示與 judge 提示 |
 | `routing.py` | 難度判斷（judge）、級距與模型選擇、地端優先邏輯 |
 | `llm.py` | LiteLLM 呼叫封裝（一般／串流／tool-calling 迴圈） |
+| `chat.py` | Chat 串流編排（judge → 選模型 → 回答 → 儲存歷史與用量） |
 | `tools.py` | 搜尋工具（Tavily 網路／校內搜尋、北大官網抓取） |
 | `attachments.py` | 附件解析（文字、Office、圖片/PDF 轉 base64） |
 | `app.py` | FastAPI app 組裝與所有 API 端點 |
+
+模型清單由 `GET /models` 端點對外提供（來源是 `config.py`），前端啟動時會自動同步，
+新增模型（含地端 `local-*`）不需要改前端。
 
 ## 2. 地端模型通道（已預留）
 
@@ -116,8 +120,14 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
   目前是單機記憶體版，之後跑多個 instance 要改集中式（例如 Redis）。
 - **錯誤訊息不外洩**：串流錯誤與檔案讀取失敗只回一般化訊息，詳細堆疊留在 server log。
 - **輸入驗證**：訊息長度上限 10 萬字、上傳 20MB／音檔 25MB、上傳副檔名只允許英數字、
-  檔案預覽只能讀自己 `uploads/{uid}/` 底下的檔案、`fetch_ntpu_page` 只接受 ntpu.edu.tw 網域（SSRF 防護）。
-- **安全回應標頭**：`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`。
+  檔案預覽只能讀自己 `uploads/{uid}/` 底下的檔案、`fetch_ntpu_page` 只接受 ntpu.edu.tw 網域，
+  且跟隨轉址後會再驗證一次網域（SSRF 防護）。
+- **檔案預覽防 XSS**：`/file-preview` 只以原始 MIME 回傳圖片／音訊／影片／PDF；
+  HTML、SVG 與各種文字格式一律改用 `text/plain` 回應，其他未知格式回 `application/octet-stream` 附件下載，
+  避免使用者上傳的內容在 API 網域上執行腳本。
+- **安全回應標頭**：`X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy`、
+  `Content-Security-Policy`（白名單對應前端實際使用的 CDN 與 Firebase，可用 `CONTENT_SECURITY_POLICY` 環境變數覆寫）、
+  `Strict-Transport-Security`（HSTS）。
 - **容器強化**：後端映像升級為 `python:3.12-slim`，並以非 root 使用者執行。
 - **CORS**：預設 `*` 會在啟動時警告；正式環境請設定 `ALLOWED_ORIGINS`（逗號分隔白名單）。
 
