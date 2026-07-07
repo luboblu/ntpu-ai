@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>NTPU AI</title>
+<meta name="theme-color" content="#ffffff" />
+<title>ChatNTPU</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230d0d0d'/%3E%3Cpath d='M14 16h36a6 6 0 0 1 6 6v16a6 6 0 0 1-6 6H30l-9 9v-9h-7a6 6 0 0 1-6-6V22a6 6 0 0 1 6-6z' fill='%23ffffff'/%3E%3Ctext x='32' y='37.5' text-anchor='middle' font-family='Arial, Helvetica, sans-serif' font-size='19' font-weight='800' fill='%230d0d0d'%3EN%3C/text%3E%3C/svg%3E" />
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -90,7 +92,8 @@
     padding: 36px 32px; width: 380px; max-width: 94vw;
     box-shadow: 0 8px 40px rgba(0,0,0,.25);
   }
-  .auth-logo { font-size: 32px; margin-bottom: 8px; }
+  .auth-logo { margin-bottom: 12px; line-height: 0; }
+  .auth-logo svg { border-radius: 10px; }
   .auth-card h2 { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
   .auth-subtitle { font-size: 13px; color: var(--text4); margin-bottom: 24px; }
 
@@ -174,6 +177,27 @@
     }
     .sidebar.mobile-open { transform: translateX(0); }
     .toggle-btn { display: flex !important; }
+
+    /* ── 手機版 RWD ── */
+    .header { padding: 8px 10px; }
+    .user-email { display: none; }
+    .messages { padding: 16px 0 8px; }
+    .inner { padding: 0 14px; }
+    .msg-body { max-width: 92%; }
+    .msg.user .msg-body { max-width: 85%; }
+    .welcome { padding: 64px 16px 32px; }
+    .welcome h2 { font-size: 22px; }
+    .input-area { padding: 8px 10px 12px; }
+    textarea { font-size: 16px; }  /* ≥16px 才不會觸發 iOS 聚焦自動放大 */
+    #preview-panel { width: 100vw; max-width: 100vw; }
+    #admin-overlay { padding: 12px 8px; }
+    .admin-body { padding: 14px; max-height: calc(100dvh - 170px); }
+    #stats-content, #users-content { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    #stats-content .a-table { min-width: 620px; }
+    #users-content .a-table { min-width: 480px; }
+    .cfg-row { flex-wrap: wrap; }
+    .settings-actions { flex-wrap: wrap; }
+    #share-toast { min-width: 0; width: calc(100vw - 24px); }
   }
 
   /* ── Main ── */
@@ -192,7 +216,8 @@
     font-size: 18px; color: var(--text3); flex-shrink: 0;
   }
   .toggle-btn:hover { background: var(--sidebar-hover); }
-  .header h1 { font-size: 15px; font-weight: 600; color: var(--text); flex: 1; }
+  .header h1 { font-size: 15px; font-weight: 600; color: var(--text); flex: 1; display: flex; align-items: center; gap: 8px; }
+  .app-logo { flex-shrink: 0; border-radius: 5px; }
   .header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
   .user-email { font-size: 12px; color: var(--text4); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .logout-btn {
@@ -717,8 +742,14 @@
 <!-- ── Auth overlay ── -->
 <div id="auth-overlay">
   <div class="auth-card">
-    <div class="auth-logo">🎓</div>
-    <h2 id="auth-title">歡迎使用 NTPU AI</h2>
+    <div class="auth-logo">
+      <svg width="44" height="44" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-label="ChatNTPU">
+        <rect width="64" height="64" rx="14" fill="var(--accent)"/>
+        <path d="M14 16h36a6 6 0 0 1 6 6v16a6 6 0 0 1-6 6H30l-9 9v-9h-7a6 6 0 0 1-6-6V22a6 6 0 0 1 6-6z" fill="var(--accent-fg)"/>
+        <text x="32" y="37.5" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="800" fill="var(--accent)">N</text>
+      </svg>
+    </div>
+    <h2 id="auth-title">歡迎使用 ChatNTPU</h2>
     <p class="auth-subtitle" id="auth-sub">請使用 NTPU Google 帳號登入</p>
     <button class="google-btn" id="googleSignInBtn">
       <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
@@ -844,7 +875,14 @@
 <div class="main">
   <div class="header">
     <button class="toggle-btn" id="sidebarToggle">&#x2630;</button>
-    <h1>NTPU AI</h1>
+    <h1>
+      <svg class="app-logo" width="22" height="22" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="64" height="64" rx="14" fill="var(--accent)"/>
+        <path d="M14 16h36a6 6 0 0 1 6 6v16a6 6 0 0 1-6 6H30l-9 9v-9h-7a6 6 0 0 1-6-6V22a6 6 0 0 1 6-6z" fill="var(--accent-fg)"/>
+        <text x="32" y="37.5" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="800" fill="var(--accent)">N</text>
+      </svg>
+      <span id="app-title">ChatNTPU</span>
+    </h1>
     <div class="header-right">
       <span class="user-email" id="user-email"></span>
       <button class="admin-btn" id="adminBtn" onclick="openAdmin()">&#x1F6E1;&#xFE0F; 管理員</button>
@@ -1700,7 +1738,7 @@
   // ── i18n ──
   const I18N = {
     zh: {
-      title:            "NTPU AI",
+      title:            "ChatNTPU",
       adminBtn:         "🛡️ 管理員",
       logoutBtn:        "登出",
       logoutConfirm:    "確定要登出嗎？",
@@ -1710,7 +1748,7 @@
       welcomeP:         "系統會自動判斷問題難度，並在小／中／大級距中選擇合適模型",
       placeholder:      "輸入訊息… (Enter 送出，Shift+Enter 換行)",
       hint:             "AI 可能出錯，重要內容請自行驗證",
-      authTitle_login:  "歡迎使用 NTPU AI",
+      authTitle_login:  "歡迎使用 ChatNTPU",
       authSub_login:    "請使用 NTPU Google 帳號登入",
       googleSignIn:     "使用 Google 帳號登入",
       authDomainHint:   "僅限 @gm.ntpu.edu.tw / @ms.ntpu.edu.tw 帳號",
@@ -1825,7 +1863,7 @@
       shareCopied:      "已複製！",
       shareFail:        "分享失敗：",
       shareViewTitle:   "分享的對話",
-      shareViewBack:    "回到 NTPU AI",
+      shareViewBack:    "回到 ChatNTPU",
       micTitle:         "語音輸入",
       micStop:          "點擊停止錄音",
       micError:         "語音辨識失敗，請再試一次",
@@ -1836,7 +1874,7 @@
       historyLimitBar:  "↑ 以上訊息已超出 AI 記憶範圍（最多記 10 輪對話）",
     },
     en: {
-      title:            "NTPU AI",
+      title:            "ChatNTPU",
       adminBtn:         "🛡️ Admin",
       logoutBtn:        "Logout",
       logoutConfirm:    "Are you sure you want to sign out?",
@@ -1846,7 +1884,7 @@
       welcomeP:         "The system auto-routes your question to the right model within small, medium, or large tiers",
       placeholder:      "Type a message… (Enter to send, Shift+Enter for newline)",
       hint:             "AI may make mistakes. Please verify important information.",
-      authTitle_login:  "Welcome to NTPU AI",
+      authTitle_login:  "Welcome to ChatNTPU",
       authSub_login:    "Sign in with your NTPU Google account",
       googleSignIn:     "Sign in with Google",
       authDomainHint:   "@gm.ntpu.edu.tw / @ms.ntpu.edu.tw accounts only",
@@ -1961,7 +1999,7 @@
       shareCopied:      "Copied!",
       shareFail:        "Share failed: ",
       shareViewTitle:   "Shared conversation",
-      shareViewBack:    "Back to NTPU AI",
+      shareViewBack:    "Back to ChatNTPU",
       micTitle:         "Voice input",
       micStop:          "Click to stop recording",
       micError:         "Speech recognition failed, please try again",
@@ -1979,7 +2017,8 @@
   function applyLang() {
     const L = I18N[_lang];
     document.title = L.title;
-    document.querySelector(".header h1").textContent = L.title;
+    const appTitle = document.getElementById("app-title");
+    if (appTitle) appTitle.textContent = L.title;
     document.getElementById("logoutBtn").textContent = L.logoutBtn;
     document.getElementById("newChatBtn").textContent = L.newChatBtn;
     document.getElementById("darkToggle").title = L.darkTitle;
@@ -2081,6 +2120,7 @@
   function applyDark(on) {
     document.body.classList.toggle("dark", on);
     darkToggle.textContent = on ? "☀️" : "🌙";
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", on ? "#212121" : "#ffffff");
   }
   applyDark(localStorage.getItem("dark") === "1");
   darkToggle.onclick = () => {
@@ -2436,7 +2476,7 @@
   function exportConversation() {
     const messages = document.querySelectorAll("#messages .inner .msg");
     if (!messages.length) { alert(t("exportEmpty")); return; }
-    let md = `# NTPU AI 對話記錄\n${new Date().toLocaleString(_lang === "zh" ? "zh-TW" : "en-US")}\n\n---\n\n`;
+    let md = `# ChatNTPU 對話記錄\n${new Date().toLocaleString(_lang === "zh" ? "zh-TW" : "en-US")}\n\n---\n\n`;
     messages.forEach(msg => {
       const isUser = msg.classList.contains("user");
       const bubble = msg.querySelector(".bubble");
@@ -2447,7 +2487,7 @@
     });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([md], { type: "text/markdown" }));
-    a.download = `ntpu-ai-${new Date().toISOString().slice(0,10)}.md`;
+    a.download = `chatntpu-${new Date().toISOString().slice(0,10)}.md`;
     a.click();
   }
 
@@ -2545,7 +2585,7 @@
       const data = await res.json();
       const title = data.title || t("shareViewTitle");
       document.getElementById("share-view-title").textContent = title;
-      document.title = title + " — NTPU AI";
+      document.title = title + " — ChatNTPU";
       if (data.history?.length) {
         renderLoadedHistory(data.history);
       } else {
