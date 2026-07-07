@@ -654,8 +654,18 @@
   .attach-menu-item.ntpu-active .ntpu-check { display: inline; }
   .menu-check { display: none; margin-left: auto; font-size: 12px; color: var(--ok); font-weight: 700; }
   .ntpu-check { display: none; margin-left: auto; font-size: 12px; color: var(--ok); font-weight: 700; }
+  .attach-menu-item svg { flex-shrink: 0; color: var(--text3); }
+  .attach-menu-item.active svg, .attach-menu-item.ntpu-active svg { color: var(--text); }
   .attach-btn.search-on { background: var(--sidebar-active); color: var(--text); }
   .attach-btn.ntpu-on { background: var(--sidebar-active); color: var(--text); }
+
+  /* 語音辨識中的轉圈動畫 */
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--border3); border-top-color: var(--text3);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ── Conv item with share ── */
   .conv-item {
@@ -769,13 +779,13 @@
 <div id="admin-overlay" class="hidden">
   <div class="admin-panel">
     <div class="admin-header">
-      <h2>&#x1F6E1;&#xFE0F; 管理員面板</h2>
+      <h2>管理員面板</h2>
       <button class="admin-close" onclick="closeAdmin()">&#x2715;</button>
     </div>
     <div class="admin-tabs" id="admin-tabs-bar">
-      <button class="tab-btn active" onclick="switchTab('stats')">&#x1F4CA; 使用統計</button>
-      <button class="tab-btn" onclick="switchTab('config')">&#x2699;&#xFE0F; 路由設定</button>
-      <button class="tab-btn" onclick="switchTab('users')">&#x1F465; 使用者管理</button>
+      <button class="tab-btn active" onclick="switchTab('stats')">使用統計</button>
+      <button class="tab-btn" onclick="switchTab('config')">路由設定</button>
+      <button class="tab-btn" onclick="switchTab('users')">使用者管理</button>
     </div>
     <div class="admin-body">
 
@@ -874,7 +884,9 @@
 <!-- ── Main ── -->
 <div class="main">
   <div class="header">
-    <button class="toggle-btn" id="sidebarToggle">&#x2630;</button>
+    <button class="toggle-btn" id="sidebarToggle">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <h1>
       <svg class="app-logo" width="22" height="22" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <rect width="64" height="64" rx="14" fill="var(--accent)"/>
@@ -885,10 +897,12 @@
     </h1>
     <div class="header-right">
       <span class="user-email" id="user-email"></span>
-      <button class="admin-btn" id="adminBtn" onclick="openAdmin()">&#x1F6E1;&#xFE0F; 管理員</button>
-      <button class="dark-toggle" id="settingsBtn" onclick="openSettings()" title="設定">⚙️</button>
+      <button class="admin-btn" id="adminBtn" onclick="openAdmin()">管理員</button>
+      <button class="dark-toggle" id="settingsBtn" onclick="openSettings()" title="設定">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
       <button class="dark-toggle" id="langToggle" title="Switch language">中</button>
-      <button class="dark-toggle" id="darkToggle" title="切換夜色模式">🌙</button>
+      <button class="dark-toggle" id="darkToggle" title="切換夜色模式"></button>
       <button class="logout-btn" id="logoutBtn">登出</button>
     </div>
   </div>
@@ -907,17 +921,32 @@
       <div class="attach-preview" id="attachPreview"></div>
       <div class="input-row">
         <div class="attach-menu-wrap">
-          <button class="attach-btn" id="attachBtn" title="上傳 / 搜尋">&#x2B;</button>
+          <button class="attach-btn" id="attachBtn" title="上傳 / 搜尋">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
           <div class="attach-menu" id="attachMenu">
-            <div class="attach-menu-item" id="menuFileItem">📎 <span id="menu-file-label">上傳檔案</span></div>
-            <div class="attach-menu-item" id="menuSearchItem">🔍 <span id="menu-search-label">網路搜尋</span><span class="menu-check">✓</span></div>
-            <div class="attach-menu-item" id="menuNtpuItem">🏫 <span id="menu-ntpu-label">NTPU 校內搜尋</span><span class="menu-check ntpu-check">✓</span></div>
+            <div class="attach-menu-item" id="menuFileItem">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              <span id="menu-file-label">上傳檔案</span>
+            </div>
+            <div class="attach-menu-item" id="menuSearchItem">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span id="menu-search-label">網路搜尋</span><span class="menu-check">✓</span>
+            </div>
+            <div class="attach-menu-item" id="menuNtpuItem">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>
+              <span id="menu-ntpu-label">NTPU 校內搜尋</span><span class="menu-check ntpu-check">✓</span>
+            </div>
           </div>
         </div>
         <input type="file" id="fileInput" style="display:none" />
         <textarea id="input" placeholder="輸入訊息… (Enter 送出，Shift+Enter 換行)" rows="1" autocomplete="off"></textarea>
-        <button class="mic-btn" id="micBtn" title="語音輸入">🎤</button>
-        <button class="send-btn" id="sendBtn">&#x2191;</button>
+        <button class="mic-btn" id="micBtn" title="語音輸入">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+        </button>
+        <button class="send-btn" id="sendBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
       </div>
     </div>
     <div class="hint">AI 可能出錯，重要內容請自行驗證</div>
@@ -928,7 +957,7 @@
 <div id="settings-overlay" class="hidden">
   <div class="settings-modal">
     <div class="settings-header">
-      <h3 id="settings-title">⚙️ 設定</h3>
+      <h3 id="settings-title">設定</h3>
       <button class="settings-close" onclick="closeSettings()">✕</button>
     </div>
     <div class="settings-body">
@@ -977,6 +1006,19 @@
 
 <script>
   const BASE_URL = "https://ntpu-router-158606109353.asia-east1.run.app";
+
+  // ── 共用單色線條圖示（取代 emoji；stroke 用 currentColor，自動跟隨按鈕文字色）──
+  const _svg = (inner, size = 16) =>
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+  const ICONS = {
+    arrowUp: _svg('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>'),
+    stop:    '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+    sun:     _svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'),
+    moon:    _svg('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'),
+    mic:     _svg('<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/>'),
+    link:    _svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>', 13),
+    trash:   _svg('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>', 13),
+  };
 
   firebase.initializeApp({
     apiKey: "AIzaSyBFX_NqY2KrTDVjLj_QSZ6SlvrAUv_y7Y4",
@@ -1131,8 +1173,8 @@
         const sid    = conv.session_id.replace(/'/g, "\\'");
         html += `<div class="conv-item${active}" data-sid="${conv.session_id}">
           <span class="conv-item-title" title="${title}">${title}</span>
-          <button class="conv-share-btn" data-share-sid="${sid}" title="分享">🔗</button>
-          <button class="conv-del-btn" data-del-sid="${conv.session_id}" title="${t('deleteConv')}">🗑</button>
+          <button class="conv-share-btn" data-share-sid="${sid}" title="分享">${ICONS.link}</button>
+          <button class="conv-del-btn" data-del-sid="${conv.session_id}" title="${t('deleteConv')}">${ICONS.trash}</button>
         </div>`;
       }
     }
@@ -1572,11 +1614,11 @@
 
   function _setSend() {
     _sending = false; _abortCtrl = null;
-    sendBtn.innerHTML = "&#x2191;"; sendBtn.classList.remove("stop"); sendBtn.style.fontSize = "18px";
+    sendBtn.innerHTML = ICONS.arrowUp; sendBtn.classList.remove("stop");
   }
   function _setStop() {
     _sending = true;
-    sendBtn.innerHTML = "&#x25A0;"; sendBtn.classList.add("stop"); sendBtn.style.fontSize = "14px";
+    sendBtn.innerHTML = ICONS.stop; sendBtn.classList.add("stop");
   }
 
   sendBtn.onclick = () => { _sending ? _abortCtrl?.abort() : send(); };
@@ -1613,10 +1655,10 @@
         micBtn.title = t("micTitle");
         const blob = new Blob(_audioChunks, { type: mimeType });
         if (blob.size < 1000) return; // too short, ignore
-        micBtn.textContent = "⏳";
+        micBtn.innerHTML = '<span class="spinner"></span>';
         micBtn.disabled = true;
         const _txTimeout = setTimeout(() => {
-          if (micBtn.disabled) { micBtn.textContent = "🎤"; micBtn.disabled = false; alert(t("micTimeout")); }
+          if (micBtn.disabled) { micBtn.innerHTML = ICONS.mic; micBtn.disabled = false; alert(t("micTimeout")); }
         }, 30000);
         try {
           const token = await currentUser.getIdToken();
@@ -1635,7 +1677,7 @@
             alert(data.detail || t("micError"));
           }
         } catch (_) { alert(t("micError")); }
-        finally { clearTimeout(_txTimeout); micBtn.textContent = "🎤"; micBtn.disabled = false; }
+        finally { clearTimeout(_txTimeout); micBtn.innerHTML = ICONS.mic; micBtn.disabled = false; }
       };
       _mediaRecorder.start();
       _isRecording = true;
@@ -1739,7 +1781,7 @@
   const I18N = {
     zh: {
       title:            "ChatNTPU",
-      adminBtn:         "🛡️ 管理員",
+      adminBtn:         "管理員",
       logoutBtn:        "登出",
       logoutConfirm:    "確定要登出嗎？",
       newChatBtn:       "＋ 新對話",
@@ -1766,10 +1808,10 @@
         "auth/invalid-credential":   "帳號或密碼錯誤",
         "auth/too-many-requests":    "嘗試次數過多，請稍後再試",
       },
-      adminPanelTitle:  "🛡️ 管理員面板",
-      tabStats:         "📊 使用統計",
-      tabConfig:        "⚙️ 路由設定",
-      tabUsers:         "👥 使用者管理",
+      adminPanelTitle:  "管理員面板",
+      tabStats:         "使用統計",
+      tabConfig:        "路由設定",
+      tabUsers:         "使用者管理",
       noAdminH3:        "您尚未取得管理員權限",
       noAdminP:         "若您是第一位使用者，可以點下方按鈕成為系統管理員。\n若管理員已存在，請聯絡管理員為您授權。",
       becomeAdmin:      "申請成為第一位管理員",
@@ -1845,7 +1887,7 @@
       loadingFail:      "載入失敗：",
       saveFail:         "儲存失敗：",
       deleteFail:       "刪除失敗：",
-      settingsTitle:    "⚙️ 設定",
+      settingsTitle:    "設定",
       settingsSysLabel: "系統提示詞",
       settingsSysDesc:  "自訂 AI 的角色與行為，每次對話都會套用（空白 = 預設）",
       settingsSave:     "儲存",
@@ -1875,7 +1917,7 @@
     },
     en: {
       title:            "ChatNTPU",
-      adminBtn:         "🛡️ Admin",
+      adminBtn:         "Admin",
       logoutBtn:        "Logout",
       logoutConfirm:    "Are you sure you want to sign out?",
       newChatBtn:       "＋ New Chat",
@@ -1902,10 +1944,10 @@
         "auth/invalid-credential":   "Incorrect email or password",
         "auth/too-many-requests":    "Too many attempts. Please try again later.",
       },
-      adminPanelTitle:  "🛡️ Admin Panel",
-      tabStats:         "📊 Usage Stats",
-      tabConfig:        "⚙️ Routing Config",
-      tabUsers:         "👥 User Management",
+      adminPanelTitle:  "Admin Panel",
+      tabStats:         "Usage Stats",
+      tabConfig:        "Routing Config",
+      tabUsers:         "User Management",
       noAdminH3:        "You don't have admin access",
       noAdminP:         "If you are the first user, click below to become admin.\nOtherwise, ask an existing admin to grant you access.",
       becomeAdmin:      "Become the first admin",
@@ -1981,7 +2023,7 @@
       loadingFail:      "Failed to load: ",
       saveFail:         "Failed to save: ",
       deleteFail:       "Failed to delete: ",
-      settingsTitle:    "⚙️ Settings",
+      settingsTitle:    "Settings",
       settingsSysLabel: "System Prompt",
       settingsSysDesc:  "Customize the AI's role and behavior, applied to every conversation (empty = default)",
       settingsSave:     "Save",
@@ -2119,7 +2161,7 @@
   const darkToggle = document.getElementById("darkToggle");
   function applyDark(on) {
     document.body.classList.toggle("dark", on);
-    darkToggle.textContent = on ? "☀️" : "🌙";
+    darkToggle.innerHTML = on ? ICONS.sun : ICONS.moon;
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", on ? "#212121" : "#ffffff");
   }
   applyDark(localStorage.getItem("dark") === "1");
