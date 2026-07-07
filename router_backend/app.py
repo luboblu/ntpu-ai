@@ -353,7 +353,9 @@ def build_system_prompt(user_sys_prompt: str, has_tools: bool = False) -> str:
     today = datetime.datetime.now(tz=datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d")
     parts = [f"今天的日期是 {today}（台灣時間）。"]
     parts.append(
-        "請一律使用「繁體中文（台灣用語）」回答。只有在使用者明確要求改用其他語言，"
+        "請一律使用「繁體中文（台灣用語）」回答，並符合台灣的用字與詞彙習慣"
+        "（例如「軟體、程式、資訊、影片、預設、伺服器」而非「软件、程序、信息、视频、默认、服务器」），"
+        "絕對不要出現簡體字。只有在使用者明確要求改用其他語言，"
         "或使用者本身以其他語言提問時，才改用對應語言回覆；其餘情況一律用繁體中文。"
     )
     if has_tools:
