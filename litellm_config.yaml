@@ -66,12 +66,6 @@ model_list:
       model: openrouter/deepseek/deepseek-r1
       api_key: os.environ/OPENROUTER_API_KEY
 
-  # tiny 層：免費開源小模型（有速率限制、不支援工具；預設不自動路由，管理員可強制測試）
-  - model_name: cloud-tiny-llama
-    litellm_params:
-      model: openrouter/meta-llama/llama-3.2-3b-instruct:free
-      api_key: os.environ/OPENROUTER_API_KEY
-
   # 範例：如果想讓 small 級距多一個 OpenAI 候選模型，可以加下面這樣
   # 並把 SMALL_MODEL_ALIASES 加上 cloud-small-openai（同時要在環境變數設定 OPENAI_API_KEY）：
   # - model_name: cloud-small-openai
