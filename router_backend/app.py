@@ -53,12 +53,14 @@ if TINY_MODEL_ALIAS:
 MODEL_NOTES = {
     "cloud-small-claude": "Claude Haiku 4.5：快速、省成本，適合簡單問答與短任務",
     "cloud-small-gemini": "Gemini 3.1 Flash-Lite：最快速、成本低，適合大量輕量任務",
+    "cloud-small-gpt": "GPT-4o mini（OpenRouter）：便宜快速，適合簡單問答與短任務",
     "cloud-medium-claude": "Claude Sonnet 5：品質穩定，適合一般推理、寫作與程式任務",
     "cloud-medium-gemini": "Gemini 3.5 Flash：低延遲且能力均衡，適合中等複雜任務",
     "cloud-medium-deepseek": "DeepSeek V3（OpenRouter）：高 CP 值、成本低，通用推理與程式能力強，適合中等任務",
     "cloud-medium-llama": "Llama 3.3 70B（OpenRouter）：開源模型、成本低，適合中等難度的一般任務",
     "cloud-large-claude": "Claude Opus 4.8：高品質深度推理、長任務與複雜 coding",
     "cloud-large-gemini": "Gemini 2.5 Pro：深度推理與 coding，適合複雜任務",
+    "cloud-large-r1": "DeepSeek R1（OpenRouter）：強推理模型、成本低，適合數學證明與多步推理（不擅長工具呼叫）",
 }
 
 MODEL_TO_ROUTE = {
@@ -214,6 +216,22 @@ def _route_from_score(config: dict, score: float) -> str:
 def _default_model_for_route(route: str) -> str:
     candidates = MODEL_CANDIDATES.get(route) or MODEL_CANDIDATES["small"]
     return candidates[0]
+
+
+# 不支援 function calling 的模型（例如 DeepSeek R1）；啟用搜尋工具時要避開，
+# 否則工具呼叫會失敗。可用環境變數覆寫。
+NO_TOOL_MODELS = set(_alias_list(os.environ.get("NO_TOOL_MODELS", "cloud-large-r1")))
+
+
+def _pick_tool_capable(route: str, model_alias: str) -> tuple[str, str]:
+    """啟用工具時，若選到不支援 function calling 的模型，改挑同級距其他可用模型；
+    若整個級距都不支援，退到 medium 的預設模型。"""
+    if model_alias not in NO_TOOL_MODELS:
+        return route, model_alias
+    for alias in MODEL_CANDIDATES.get(route, []):
+        if alias not in NO_TOOL_MODELS:
+            return route, alias
+    return "medium", _default_model_for_route("medium")
 
 
 def _model_options_text() -> str:
@@ -1048,9 +1066,13 @@ async def chat_stream(req: ChatRequest, authorization: Optional[str] = Header(No
                 judge["model"] = model_alias
 
                 tools = _build_search_tools(req) if TAVILY_KEY else []
-                # 工具啟用時避免路由到不支援 function calling 的開源小模型
+                # 工具啟用時避免路由到不支援 function calling 的模型
                 if tools and route == "tiny":
                     route, model_alias = "small", _default_model_for_route("small")
+                if tools:
+                    route, model_alias = _pick_tool_capable(route, model_alias)
+                    judge["route"] = route
+                    judge["model"] = model_alias
 
                 # 3. 先送 judge metadata（順便取出 usage，不傳給前端）
                 judge_usage = judge.pop("_usage", {"input_tokens": 0, "output_tokens": 0})

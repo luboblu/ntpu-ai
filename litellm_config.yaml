@@ -45,7 +45,12 @@ model_list:
       model: gemini/gemini-2.5-pro
       api_key: os.environ/GEMINI_API_KEY
 
-  # ── OpenRouter 候選（中模型級距）：高 CP 值、成本低的替代選項 ──
+  # ── OpenRouter 候選：小 / 中 / 大 級距各補一個高 CP 值模型 ──
+  - model_name: cloud-small-gpt
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      api_key: os.environ/OPENROUTER_API_KEY
+
   - model_name: cloud-medium-deepseek
     litellm_params:
       model: openrouter/deepseek/deepseek-chat
@@ -54,6 +59,11 @@ model_list:
   - model_name: cloud-medium-llama
     litellm_params:
       model: openrouter/meta-llama/llama-3.3-70b-instruct
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-large-r1
+    litellm_params:
+      model: openrouter/deepseek/deepseek-r1
       api_key: os.environ/OPENROUTER_API_KEY
 
   # 範例：如果想讓 small 級距多一個 OpenAI 候選模型，可以加下面這樣
