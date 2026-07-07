@@ -352,6 +352,10 @@ async def get_user_system_prompt(uid: str) -> str:
 def build_system_prompt(user_sys_prompt: str, has_tools: bool = False) -> str:
     today = datetime.datetime.now(tz=datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d")
     parts = [f"今天的日期是 {today}（台灣時間）。"]
+    parts.append(
+        "請一律使用「繁體中文（台灣用語）」回答。只有在使用者明確要求改用其他語言，"
+        "或使用者本身以其他語言提問時，才改用對應語言回覆；其餘情況一律用繁體中文。"
+    )
     if has_tools:
         parts.append(
             "你可以使用搜尋工具查詢即時或校內資訊。當使用者詢問臺北大學（NTPU）的公告、"
