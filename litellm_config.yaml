@@ -61,6 +61,12 @@ model_list:
       model: openrouter/meta-llama/llama-3.3-70b-instruct
       api_key: os.environ/OPENROUTER_API_KEY
 
+  # NVIDIA NIM（API Catalog）：Nemotron Super 49B，支援 tool calling
+  - model_name: cloud-medium-nemotron
+    litellm_params:
+      model: nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1
+      api_key: os.environ/NVIDIA_NIM_API_KEY
+
   - model_name: cloud-large-r1
     litellm_params:
       model: openrouter/deepseek/deepseek-r1

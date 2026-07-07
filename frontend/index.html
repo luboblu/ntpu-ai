@@ -763,6 +763,7 @@
             <option value="cloud-medium-gemini">Gemini Flash（中模型）</option>
             <option value="cloud-medium-deepseek">DeepSeek V3（中模型）</option>
             <option value="cloud-medium-llama">Llama 3.3 70B（中模型）</option>
+            <option value="cloud-medium-nemotron">Nemotron Super 49B（中模型）</option>
             <option value="cloud-large-claude">Opus（大模型）</option>
             <option value="cloud-large-gemini">Gemini Pro（大模型）</option>
             <option value="cloud-large-r1">DeepSeek R1（大模型）</option>
@@ -1258,6 +1259,7 @@
     "cloud-medium-gemini": { cls: "medium", short: "Gemini Flash",      full: "Gemini 3.5 Flash" },
     "cloud-medium-deepseek": { cls: "medium", short: "DeepSeek",        full: "DeepSeek V3 (OpenRouter)" },
     "cloud-medium-llama":  { cls: "medium", short: "Llama 3.3",         full: "Llama 3.3 70B (OpenRouter)" },
+    "cloud-medium-nemotron": { cls: "medium", short: "Nemotron 49B",    full: "Llama 3.3 Nemotron Super 49B (NVIDIA)" },
     "cloud-large-claude":  { cls: "large",  short: "Opus",              full: "Claude Opus 4.8" },
     "cloud-large-gemini":  { cls: "large",  short: "Gemini Pro",        full: "Gemini 2.5 Pro" },
     "cloud-large-r1":      { cls: "large",  short: "DeepSeek R1",       full: "DeepSeek R1 (OpenRouter)" },
@@ -1691,6 +1693,7 @@
       cfgForceMediumGemini: "Gemini Flash（中模型）",
       cfgForceMediumDeepseek: "DeepSeek V3（中模型）",
       cfgForceMediumLlama:  "Llama 3.3 70B（中模型）",
+      cfgForceMediumNemotron: "Nemotron Super 49B（中模型）",
       cfgForceLargeClaude:  "Opus（大模型）",
       cfgForceLargeGemini:  "Gemini Pro（大模型）",
       cfgForceLargeR1:      "DeepSeek R1（大模型）",
@@ -1826,6 +1829,7 @@
       cfgForceMediumGemini: "Gemini Flash (medium)",
       cfgForceMediumDeepseek: "DeepSeek V3 (medium)",
       cfgForceMediumLlama:  "Llama 3.3 70B (medium)",
+      cfgForceMediumNemotron: "Nemotron Super 49B (medium)",
       cfgForceLargeClaude:  "Opus (large)",
       cfgForceLargeGemini:  "Gemini Pro (large)",
       cfgForceLargeR1:      "DeepSeek R1 (large)",
@@ -1970,6 +1974,7 @@
       "cloud-medium-gemini":  L.cfgForceMediumGemini,
       "cloud-medium-deepseek":L.cfgForceMediumDeepseek,
       "cloud-medium-llama":   L.cfgForceMediumLlama,
+      "cloud-medium-nemotron":L.cfgForceMediumNemotron,
       "cloud-large-claude":   L.cfgForceLargeClaude,
       "cloud-large-gemini":   L.cfgForceLargeGemini,
       "cloud-large-r1":       L.cfgForceLargeR1,

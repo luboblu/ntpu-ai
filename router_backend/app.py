@@ -58,6 +58,7 @@ MODEL_NOTES = {
     "cloud-medium-gemini": "Gemini 3.5 Flash：低延遲且能力均衡，適合中等複雜任務",
     "cloud-medium-deepseek": "DeepSeek V3（OpenRouter）：高 CP 值、成本低，通用推理與程式能力強，適合中等任務",
     "cloud-medium-llama": "Llama 3.3 70B（OpenRouter）：開源模型、成本低，適合中等難度的一般任務",
+    "cloud-medium-nemotron": "Llama 3.3 Nemotron Super 49B（NVIDIA）：NVIDIA 調校，推理與指令遵循佳，支援工具呼叫，適合中等任務",
     "cloud-large-claude": "Claude Opus 4.8：高品質深度推理、長任務與複雜 coding",
     "cloud-large-gemini": "Gemini 2.5 Pro：深度推理與 coding，適合複雜任務",
     "cloud-large-r1": "DeepSeek R1（OpenRouter）：強推理模型、成本低，適合數學證明與多步推理（不擅長工具呼叫）",
