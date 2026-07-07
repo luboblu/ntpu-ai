@@ -758,12 +758,14 @@
             <option value="large">大模型候選池（由 judge 選）</option>
             <option value="cloud-small-claude">Haiku（小模型）</option>
             <option value="cloud-small-gemini">Gemini Flash-Lite（小模型）</option>
+            <option value="cloud-small-gpt">GPT-4o mini（小模型）</option>
             <option value="cloud-medium-claude">Sonnet（中模型）</option>
             <option value="cloud-medium-gemini">Gemini Flash（中模型）</option>
             <option value="cloud-medium-deepseek">DeepSeek V3（中模型）</option>
             <option value="cloud-medium-llama">Llama 3.3 70B（中模型）</option>
             <option value="cloud-large-claude">Opus（大模型）</option>
             <option value="cloud-large-gemini">Gemini Pro（大模型）</option>
+            <option value="cloud-large-r1">DeepSeek R1（大模型）</option>
             <option value="tiny">強制開源小模型</option>
           </select>
         </div>
@@ -1251,12 +1253,14 @@
   const MODEL_META = {
     "cloud-small-claude":  { cls: "small",  short: "Haiku",             full: "Claude Haiku 4.5" },
     "cloud-small-gemini":  { cls: "small",  short: "Gemini Flash-Lite", full: "Gemini 3.1 Flash-Lite" },
+    "cloud-small-gpt":     { cls: "small",  short: "GPT-4o mini",       full: "GPT-4o mini (OpenRouter)" },
     "cloud-medium-claude": { cls: "medium", short: "Sonnet",            full: "Claude Sonnet 5" },
     "cloud-medium-gemini": { cls: "medium", short: "Gemini Flash",      full: "Gemini 3.5 Flash" },
     "cloud-medium-deepseek": { cls: "medium", short: "DeepSeek",        full: "DeepSeek V3 (OpenRouter)" },
     "cloud-medium-llama":  { cls: "medium", short: "Llama 3.3",         full: "Llama 3.3 70B (OpenRouter)" },
     "cloud-large-claude":  { cls: "large",  short: "Opus",              full: "Claude Opus 4.8" },
     "cloud-large-gemini":  { cls: "large",  short: "Gemini Pro",        full: "Gemini 2.5 Pro" },
+    "cloud-large-r1":      { cls: "large",  short: "DeepSeek R1",       full: "DeepSeek R1 (OpenRouter)" },
   };
 
   function _modelBadge(route, model) {
@@ -1682,12 +1686,14 @@
       cfgForceTierLarge:  "大模型候選池（由 judge 選）",
       cfgForceSmallClaude:  "Haiku（小模型）",
       cfgForceSmallGemini:  "Gemini Flash-Lite（小模型）",
+      cfgForceSmallGpt:     "GPT-4o mini（小模型）",
       cfgForceMediumClaude: "Sonnet（中模型）",
       cfgForceMediumGemini: "Gemini Flash（中模型）",
       cfgForceMediumDeepseek: "DeepSeek V3（中模型）",
       cfgForceMediumLlama:  "Llama 3.3 70B（中模型）",
       cfgForceLargeClaude:  "Opus（大模型）",
       cfgForceLargeGemini:  "Gemini Pro（大模型）",
+      cfgForceLargeR1:      "DeepSeek R1（大模型）",
       cfgForceTiny:     "強制開源小模型",
       saveBtn:          "儲存設定",
       cfgSaved:         "✓ 設定已儲存，約 30 秒後生效",
@@ -1815,12 +1821,14 @@
       cfgForceTierLarge:  "Large model pool (judge chooses)",
       cfgForceSmallClaude:  "Haiku (small)",
       cfgForceSmallGemini:  "Gemini Flash-Lite (small)",
+      cfgForceSmallGpt:     "GPT-4o mini (small)",
       cfgForceMediumClaude: "Sonnet (medium)",
       cfgForceMediumGemini: "Gemini Flash (medium)",
       cfgForceMediumDeepseek: "DeepSeek V3 (medium)",
       cfgForceMediumLlama:  "Llama 3.3 70B (medium)",
       cfgForceLargeClaude:  "Opus (large)",
       cfgForceLargeGemini:  "Gemini Pro (large)",
+      cfgForceLargeR1:      "DeepSeek R1 (large)",
       cfgForceTiny:     "Force open-source model",
       saveBtn:          "Save Settings",
       cfgSaved:         "✓ Settings saved. Takes effect in ~30 seconds.",
@@ -1957,12 +1965,14 @@
       "large":                L.cfgForceTierLarge,
       "cloud-small-claude":   L.cfgForceSmallClaude,
       "cloud-small-gemini":   L.cfgForceSmallGemini,
+      "cloud-small-gpt":      L.cfgForceSmallGpt,
       "cloud-medium-claude":  L.cfgForceMediumClaude,
       "cloud-medium-gemini":  L.cfgForceMediumGemini,
       "cloud-medium-deepseek":L.cfgForceMediumDeepseek,
       "cloud-medium-llama":   L.cfgForceMediumLlama,
       "cloud-large-claude":   L.cfgForceLargeClaude,
       "cloud-large-gemini":   L.cfgForceLargeGemini,
+      "cloud-large-r1":       L.cfgForceLargeR1,
       "tiny":                 L.cfgForceTiny,
     };
     document.querySelectorAll("#cfg-force-model option").forEach(o => {
