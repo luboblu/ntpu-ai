@@ -11,10 +11,12 @@
 # 只要在這裡新增 model_name，並把對應的 *_MODEL_ALIASES 環境變數加上該 alias。
 
 model_list:
+  # Judge（難度分類）：Mistral Small 4 —— Mistral 官方對「進階推理分類」情境的
+  # 建議模型，比先前的 Gemini 2.5 Flash 便宜（輸入省 50%、輸出省 76%）
   - model_name: judge-model
     litellm_params:
-      model: gemini/gemini-2.5-flash
-      api_key: os.environ/GEMINI_API_KEY
+      model: openrouter/mistralai/mistral-small-2603
+      api_key: os.environ/OPENROUTER_API_KEY
 
   - model_name: cloud-small-claude
     litellm_params:

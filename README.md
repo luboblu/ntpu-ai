@@ -57,7 +57,8 @@ alias 以 `local-` 開頭即被視為地端模型。之後接 Ollama / vLLM 時�
 pip install 'litellm[proxy]'
 export LITELLM_MASTER_KEY=$(python3 -c "import secrets; print('sk-'+secrets.token_urlsafe(24))")
 export ANTHROPIC_API_KEY=sk-ant-xxxxx      # 換成你自己的金鑰
-export GEMINI_API_KEY=xxxxx                # judge-model 仍使用 Gemini 時需要
+export GEMINI_API_KEY=xxxxx                # Gemini 回答模型需要
+export OPENROUTER_API_KEY=sk-or-xxxxx      # judge-model（Mistral Small 4）與 OpenRouter 候選模型需要
 litellm --config litellm_config.yaml --port 4000 &
 
 # 2) 路由後端

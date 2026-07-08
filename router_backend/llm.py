@@ -36,11 +36,17 @@ def _message_text(msg: dict) -> str:
 
 
 async def call_litellm(client: httpx.AsyncClient, model_alias: str, messages: list,
-                       max_tokens: int = MAX_ANSWER_TOKENS) -> tuple[str, dict]:
-    """非串流呼叫，回傳 (content, usage)。"""
-    data = await _chat_completion(client, {
-        "model": model_alias, "messages": messages, "max_tokens": max_tokens,
-    })
+                       max_tokens: int = MAX_ANSWER_TOKENS,
+                       json_mode: bool = False) -> tuple[str, dict]:
+    """非串流呼叫，回傳 (content, usage)。
+
+    json_mode=True 時啟用供應商原生的 JSON 輸出模式（response_format），
+    確保回應是合法 JSON；不支援的供應商由 litellm 的 drop_params 直接忽略。
+    """
+    payload = {"model": model_alias, "messages": messages, "max_tokens": max_tokens}
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
+    data = await _chat_completion(client, payload)
     input_tokens, output_tokens = _usage_of(data)
     return _message_text(data["choices"][0]["message"]), {
         "input_tokens": input_tokens, "output_tokens": output_tokens,

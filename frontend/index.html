@@ -2513,7 +2513,7 @@
       let mIn = 0, mOut = 0;
       let modelRows = byModel.map(m => {
         mIn += m.input_tokens; mOut += m.output_tokens;
-        const name = m.model === "judge-model" ? "Judge · Gemini 2.5 Flash" : _modelFullName(m.model);
+        const name = m.model === "judge-model" ? "Judge · Mistral Small 4" : _modelFullName(m.model);
         return `<tr>
           <td>${name}</td>
           <td style="text-align:center">${m.requests || 0}</td>

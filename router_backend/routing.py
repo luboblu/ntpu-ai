@@ -143,7 +143,8 @@ async def model_classify(client: httpx.AsyncClient, text: str, history: list) ->
         {"role": "user", "content": f"{context_block}可選模型：\n{_model_options_text()}\n\n"
                                     f"請評估以下最新訊息的難度並選擇級距與模型：\n```\n{text}\n```"},
     ]
-    raw, judge_usage = await call_litellm(client, JUDGE_MODEL_ALIAS, messages, max_tokens=1024)
+    raw, judge_usage = await call_litellm(client, JUDGE_MODEL_ALIAS, messages,
+                                          max_tokens=1024, json_mode=True)
 
     parsed = _parse_judge_json(raw)
     if parsed:
