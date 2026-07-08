@@ -64,6 +64,14 @@ async def _check_and_compress(uid: str, session_id: str, session_history: list) 
         logger.exception("長期記憶狀態檢查/壓縮失敗 uid=%s session=%s", uid, session_id)
 
 
+async def force_compress(uid: str, session_id: str, profile: dict, session_history: list) -> None:
+    """使用者在前端手動點擊「立即更新記憶」時呼叫，跳過時間門檻直接壓縮。
+    跟背景自動觸發共用同一個 _compress()，差別只在於這是前端等待的同步呼叫，
+    不是 fire-and-forget，呼叫端可以直接知道成功或失敗。"""
+    await _compress(uid, profile, session_history)
+    await store.set_session_memory_pending(uid, session_id, None)
+
+
 async def _compress(uid: str, profile: dict, session_history: list) -> None:
     recent = session_history[-_MAX_INPUT_MESSAGES:]
     turns_text = "\n\n".join(

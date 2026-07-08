@@ -25,12 +25,14 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
+import memory
 import store
 from attachments import OFFICE_MIMES, extract_office_text, is_text_mime
 from chat import stream_chat
 from config import (
     CHAT_RATE_LIMIT_PER_MINUTE,
     CORS_ORIGINS,
+    MEMORY_COMPRESS_INTERVAL_HOURS,
     MODEL_CANDIDATES,
     MODEL_NOTES,
     OPENAI_API_KEY,
@@ -132,6 +134,33 @@ async def get_conversation(session_id: str, authorization: Optional[str] = Heade
         raise HTTPException(status_code=401)
     data = await store.get_session_data(uid, session_id)
     return {"session_id": session_id, "history": data.get("history", []), "title": data.get("title", "對話")}
+
+
+@app.get("/conversations/{session_id}/memory-status")
+async def get_memory_status(session_id: str, authorization: Optional[str] = Header(None)):
+    """給前端畫「距離下次記憶更新還有多少 %」的圓圈進度用。"""
+    uid = await verify_token(authorization)
+    if uid == "anonymous":
+        return {"pending_since": None, "interval_hours": MEMORY_COMPRESS_INTERVAL_HOURS}
+    pending_since = await store.get_session_memory_pending_since(uid, session_id)
+    return {
+        "pending_since": pending_since.isoformat() if pending_since else None,
+        "interval_hours": MEMORY_COMPRESS_INTERVAL_HOURS,
+    }
+
+
+@app.post("/conversations/{session_id}/memory-compress-now")
+async def force_memory_compress(session_id: str, authorization: Optional[str] = Header(None)):
+    """使用者手動點擊「立即更新記憶」，跳過時間門檻直接壓縮這個對話的內容。"""
+    uid = await verify_token(authorization)
+    if uid == "anonymous":
+        raise HTTPException(status_code=401)
+    history = await store.get_history(uid, session_id)
+    if not history:
+        raise HTTPException(status_code=404, detail="對話不存在，沒有內容可以更新")
+    profile = await store.get_user_profile(uid)
+    await memory.force_compress(uid, session_id, profile, history)
+    return {"ok": True}
 
 
 @app.post("/conversations/{session_id}/share")

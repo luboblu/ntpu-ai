@@ -405,6 +405,28 @@
     0%,100% { box-shadow: 0 0 0 0 rgba(217,48,37,.35); }
     50%      { box-shadow: 0 0 0 6px rgba(217,48,37,0); }
   }
+  .memory-ring-btn {
+    width: 34px; height: 34px; border-radius: 50%; border: none;
+    background: transparent; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0; position: relative;
+    transition: background .15s;
+  }
+  .memory-ring-btn:hover { background: var(--sidebar-hover); }
+  .memory-ring-btn.hidden { display: none; }
+  .memory-ring-bg { stroke: var(--border3); }
+  .memory-ring-fg {
+    stroke: var(--text3); transition: stroke-dashoffset .4s ease, stroke .3s ease;
+  }
+  .memory-ring-btn.ready .memory-ring-fg { stroke: var(--ok); }
+  .memory-ring-btn.busy .memory-ring-fg { animation: memory-ring-spin 1s linear infinite; }
+  @keyframes memory-ring-spin { to { transform: rotate(270deg); } }
+  .memory-ring-tip {
+    position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); font-size: 12px; line-height: 1.5;
+    padding: 8px 10px; border-radius: 8px; white-space: pre-line; text-align: center;
+    opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 30;
+  }
+  .memory-ring-btn:hover .memory-ring-tip { opacity: 1; }
   .send-btn {
     width: 34px; height: 34px; border-radius: 50%; border: none;
     background: var(--accent); color: var(--accent-fg); cursor: pointer;
@@ -953,6 +975,15 @@
           </div>
         </div>
         <input type="file" id="fileInput" style="display:none" />
+        <button class="memory-ring-btn hidden" id="memoryRingBtn">
+          <svg width="18" height="18" viewBox="0 0 36 36">
+            <circle class="memory-ring-bg" cx="18" cy="18" r="15.5" fill="none" stroke-width="3"/>
+            <circle class="memory-ring-fg" id="memoryRingFg" cx="18" cy="18" r="15.5" fill="none"
+                    stroke-width="3" stroke-linecap="round" stroke-dasharray="97.39" stroke-dashoffset="97.39"
+                    transform="rotate(-90 18 18)"/>
+          </svg>
+          <div class="memory-ring-tip" id="memoryRingTip"></div>
+        </button>
         <textarea id="input" placeholder="輸入訊息… (Enter 送出，Shift+Enter 換行)" rows="1" autocomplete="off"></textarea>
         <button class="mic-btn" id="micBtn" title="語音輸入">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
@@ -1131,6 +1162,7 @@
           }
         } catch (_) {}
       }
+      refreshMemoryRing();
     } else {
       document.getElementById("auth-overlay").classList.remove("hidden");
       document.getElementById("user-email").textContent = "";
@@ -1141,6 +1173,7 @@
       clearAttachPreview();
       _searchEnabled = false; _searchQuotaExceeded = false; _ntpuSearchEnabled = false; _updateSearchUI();
       document.getElementById("input").value = "";
+      _hideMemoryRing();
     }
   });
 
@@ -1230,6 +1263,7 @@
       const data = await res.json();
       renderLoadedHistory(data.history);
     } catch (_) { resetUI(); }
+    refreshMemoryRing();
   }
 
   function renderLoadedHistory(history) {
@@ -1267,6 +1301,7 @@
     sidebar.classList.remove("mobile-open");
     backdrop.classList.remove("show");
     document.querySelectorAll(".conv-item").forEach(el => el.classList.remove("active"));
+    refreshMemoryRing();
   };
 
   // ── File Preview Panel ──
@@ -1789,6 +1824,7 @@
             } else if (evt.type === "done" && streamRow) {
               _finalizeStream(streamRow, fullText, judgeEvt, evt.answer_elapsed_ms);
               loadConversations();
+              refreshMemoryRing();
             } else if (evt.type === "error") {
               document.getElementById("typing")?.remove();
               appendMsg("ai", "&#x26A0;&#xFE0F; " + evt.message);
@@ -1943,6 +1979,9 @@
       settingsMemoryDesc:  "AI 會每隔一段時間自動從對話中歸納值得記住的重點（例如你的科系、常見需求），讓之後的對話更了解你；不是即時更新，你可以隨時清除。",
       memoryClearBtn:      "清除記憶",
       memoryClearConfirm:  "確定要清除 AI 記得關於你的所有長期記憶嗎？此操作無法復原。",
+      memoryRingClean:     "目前這個對話沒有待更新的記憶內容",
+      memoryRingReady:     "記憶已經可以更新了\n點擊立即更新",
+      memoryRingProgress:  (pct) => `還剩 ${pct}% 就會自動更新記憶\n點擊立即更新`,
       searchToggleTitle:"網路搜尋",
       searchingWeb:     "搜尋中",
       menuFile:         "上傳檔案",
@@ -2096,6 +2135,9 @@
       settingsMemoryDesc:  "AI periodically summarizes durable info from your conversations (e.g. your major, common needs) so future chats understand you better; it's not real-time, and you can clear it anytime.",
       memoryClearBtn:      "Clear Memory",
       memoryClearConfirm:  "Clear everything AI remembers about you? This cannot be undone.",
+      memoryRingClean:     "No pending memory update for this conversation",
+      memoryRingReady:     "Memory is ready to update\nClick to update now",
+      memoryRingProgress:  (pct) => `${pct}% remaining until memory auto-updates\nClick to update now`,
       searchToggleTitle:"Web Search",
       searchingWeb:     "Searching",
       menuFile:         "Upload File",
@@ -2632,6 +2674,79 @@
     } catch (e) {
       msgEl.style.color = "var(--danger)";
       msgEl.textContent = t("saveFail") + e.message;
+    }
+  }
+
+  // ── Memory ring：對應目前這個對話「距離下次記憶更新還有多少 %」 ──
+  const MEMORY_RING_CIRC = 97.39; // 2 * PI * 15.5（SVG 圓的周長）
+  let _memPendingSince = null;
+  let _memIntervalHours = 3;
+  let _memTickTimer = null;
+
+  async function refreshMemoryRing() {
+    if (!currentUser || !sessionId) { _hideMemoryRing(); return; }
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${BASE_URL}/conversations/${encodeURIComponent(sessionId)}/memory-status`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (!res.ok) { _hideMemoryRing(); return; }
+      const data = await res.json();
+      _memPendingSince = data.pending_since ? new Date(data.pending_since).getTime() : null;
+      _memIntervalHours = data.interval_hours || 3;
+      _renderMemoryRing();
+      if (_memTickTimer) clearInterval(_memTickTimer);
+      _memTickTimer = setInterval(_renderMemoryRing, 30000);
+    } catch (_) { _hideMemoryRing(); }
+  }
+
+  function _hideMemoryRing() {
+    document.getElementById("memoryRingBtn").classList.add("hidden");
+    if (_memTickTimer) { clearInterval(_memTickTimer); _memTickTimer = null; }
+  }
+
+  function _renderMemoryRing() {
+    const btn = document.getElementById("memoryRingBtn");
+    const fg  = document.getElementById("memoryRingFg");
+    const tip = document.getElementById("memoryRingTip");
+    btn.classList.remove("hidden", "ready");
+
+    if (_memPendingSince === null) {
+      fg.style.strokeDashoffset = MEMORY_RING_CIRC;
+      tip.textContent = t("memoryRingClean");
+      btn.onclick = null;
+      return;
+    }
+    const elapsedMs = Date.now() - _memPendingSince;
+    const totalMs = _memIntervalHours * 3600 * 1000;
+    const pct = Math.max(0, Math.min(1, elapsedMs / totalMs));
+    fg.style.strokeDashoffset = String(MEMORY_RING_CIRC * (1 - pct));
+    if (pct >= 1) {
+      btn.classList.add("ready");
+      tip.textContent = t("memoryRingReady");
+    } else {
+      tip.textContent = t("memoryRingProgress")(Math.round((1 - pct) * 100));
+    }
+    btn.onclick = forceMemoryCompress;
+  }
+
+  async function forceMemoryCompress() {
+    if (!currentUser || !sessionId) return;
+    const btn = document.getElementById("memoryRingBtn");
+    btn.classList.add("busy");
+    btn.onclick = null;
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${BASE_URL}/conversations/${encodeURIComponent(sessionId)}/memory-compress-now`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+    } catch (_) {
+      // 靜默失敗即可，refreshMemoryRing 會把狀態拉回正確畫面
+    } finally {
+      btn.classList.remove("busy");
+      await refreshMemoryRing();
     }
   }
 
