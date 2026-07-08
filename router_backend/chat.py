@@ -3,12 +3,14 @@
 app.py 只負責 HTTP 端點與身分驗證，實際對話流程集中在這裡，
 每個步驟拆成獨立函式，方便閱讀與單獨測試。
 """
+import asyncio
 import json
 import logging
 import time
 
 import httpx
 
+import memory
 import store
 from attachments import build_user_content
 from config import HISTORY_LIMIT, JUDGE_MODEL_ALIAS, TAVILY_KEY
@@ -61,12 +63,18 @@ async def _decide_model(client: httpx.AsyncClient, req: ChatRequest,
     return route, model_alias, judge, judge_elapsed_ms, tools
 
 
-async def _build_answer_messages(uid: str, req: ChatRequest,
-                                 llm_history: list, has_tools: bool) -> list:
-    sys_prompt = await store.get_user_system_prompt(uid)
-    user_content = await build_user_content(req.message, req.file_gcs_path, req.file_mime_type)
-    messages = [{"role": "system", "content": build_system_prompt(sys_prompt, has_tools=has_tools)}]
-    return messages + llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}]
+async def _build_answer_messages(uid: str, req: ChatRequest, llm_history: list,
+                                 has_tools: bool) -> tuple[list, dict]:
+    """回傳 (messages, profile)；profile 一路帶給 _persist 用來判斷是否該
+    觸發長期記憶壓縮，避免同一份 profile doc 在同一輪對話裡被讀兩次。"""
+    profile, user_content = await asyncio.gather(
+        store.get_user_profile_fields(uid),
+        build_user_content(req.message, req.file_gcs_path, req.file_mime_type),
+    )
+    messages = [{"role": "system", "content": build_system_prompt(
+        profile.get("system_prompt", ""), has_tools=has_tools,
+        long_term_memory=profile.get("memory", ""))}]
+    return messages + llm_history[-HISTORY_LIMIT:] + [{"role": "user", "content": user_content}], profile
 
 
 async def _answer_events(client: httpx.AsyncClient, model_alias: str,
@@ -119,8 +127,8 @@ async def _answer_events(client: httpx.AsyncClient, model_alias: str,
 
 async def _persist(uid: str, email: str, req: ChatRequest, history: list,
                    full_content: str, route: str, model_alias: str, judge: dict,
-                   judge_usage: dict, answer_usage: dict):
-    """寫入對話歷史；已登入使用者另外在背景記錄 token 用量。"""
+                   judge_usage: dict, answer_usage: dict, profile: dict):
+    """寫入對話歷史；已登入使用者另外在背景記錄 token 用量、視情況壓縮長期記憶。"""
     user_entry: dict = {"role": "user", "content": req.message}
     if req.file_name:
         user_entry["_file_name"]      = req.file_name
@@ -141,6 +149,7 @@ async def _persist(uid: str, email: str, req: ChatRequest, history: list,
             JUDGE_MODEL_ALIAS, judge_usage["input_tokens"], judge_usage["output_tokens"],
             answer_usage["input_tokens"], answer_usage["output_tokens"],
         )
+        memory.maybe_compress_background(uid, profile, new_history)
 
 
 async def stream_chat(req: ChatRequest, decoded: dict):
@@ -165,7 +174,7 @@ async def stream_chat(req: ChatRequest, decoded: dict):
             yield sse({"type": "judge", "route": route, "model": model_alias,
                        "judge": judge, "judge_elapsed_ms": judge_elapsed_ms})
 
-            answer_messages = await _build_answer_messages(uid, req, llm_history, bool(tools))
+            answer_messages, profile = await _build_answer_messages(uid, req, llm_history, bool(tools))
             t1 = time.time()
             full_content, answer_usage = "", dict(_EMPTY_USAGE)
             async for ev in _answer_events(client, model_alias, answer_messages, tools):
@@ -178,7 +187,7 @@ async def stream_chat(req: ChatRequest, decoded: dict):
             yield "data: [DONE]\n\n"
 
             await _persist(uid, email, req, history, full_content,
-                           route, model_alias, judge, judge_usage, answer_usage)
+                           route, model_alias, judge, judge_usage, answer_usage, profile)
     except Exception:
         logger.exception("chat_stream 失敗 uid=%s session=%s", uid, req.session_id)
         yield sse({"type": "error", "message": "系統暫時無法回應，請稍後再試"})

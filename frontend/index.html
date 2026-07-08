@@ -963,8 +963,14 @@
       <label class="settings-label" id="settings-sys-label">系統提示詞</label>
       <div class="settings-desc" id="settings-sys-desc">自訂 AI 的角色與行為，每次對話都會套用（空白 = 預設）</div>
       <textarea class="settings-textarea" id="sys-prompt-input" rows="5" placeholder="例如：你是一位大學的 IT 助理，請用繁體中文回答，語氣要親切。"></textarea>
+
+      <label class="settings-label" id="settings-memory-label">AI 記得關於你的事</label>
+      <div class="settings-desc" id="settings-memory-desc">AI 會每隔一段時間自動從對話中歸納值得記住的重點（例如你的科系、常見需求），讓之後的對話更了解你；不是即時更新，你可以隨時清除。</div>
+      <textarea class="settings-textarea" id="memory-display" rows="4" readonly placeholder="（尚無記錄）"></textarea>
+
       <div class="settings-actions">
         <button class="settings-save-btn" onclick="saveSettings()" id="settings-save-btn">儲存</button>
+        <button class="settings-export-btn" onclick="clearMemory()" id="memory-clear-btn">清除記憶</button>
         <button class="settings-export-btn" onclick="exportConversation()" id="settings-export-btn">匯出對話</button>
       </div>
       <div class="settings-msg" id="settings-msg"></div>
@@ -1891,6 +1897,10 @@
       settingsExport:   "匯出對話",
       settingsSaved:    "✓ 已儲存",
       exportEmpty:      "目前沒有對話可以匯出",
+      settingsMemoryLabel: "AI 記得關於你的事",
+      settingsMemoryDesc:  "AI 會每隔一段時間自動從對話中歸納值得記住的重點（例如你的科系、常見需求），讓之後的對話更了解你；不是即時更新，你可以隨時清除。",
+      memoryClearBtn:      "清除記憶",
+      memoryClearConfirm:  "確定要清除 AI 記得關於你的所有長期記憶嗎？此操作無法復原。",
       searchToggleTitle:"網路搜尋",
       searchingWeb:     "搜尋中",
       menuFile:         "上傳檔案",
@@ -2026,6 +2036,10 @@
       settingsExport:   "Export Chat",
       settingsSaved:    "✓ Saved",
       exportEmpty:      "No conversation to export",
+      settingsMemoryLabel: "What AI remembers about you",
+      settingsMemoryDesc:  "AI periodically summarizes durable info from your conversations (e.g. your major, common needs) so future chats understand you better; it's not real-time, and you can clear it anytime.",
+      memoryClearBtn:      "Clear Memory",
+      memoryClearConfirm:  "Clear everything AI remembers about you? This cannot be undone.",
       searchToggleTitle:"Web Search",
       searchingWeb:     "Searching",
       menuFile:         "Upload File",
@@ -2140,6 +2154,12 @@
     if (ssSave) ssSave.textContent = L.settingsSave;
     const ssExp = document.getElementById("settings-export-btn");
     if (ssExp) ssExp.textContent = L.settingsExport;
+    const smLabel = document.getElementById("settings-memory-label");
+    if (smLabel) smLabel.textContent = L.settingsMemoryLabel;
+    const smDesc = document.getElementById("settings-memory-desc");
+    if (smDesc) smDesc.textContent = L.settingsMemoryDesc;
+    const smClear = document.getElementById("memory-clear-btn");
+    if (smClear) smClear.textContent = L.memoryClearBtn;
     // Attach menu labels
     const mfl = document.getElementById("menu-file-label");
     if (mfl) mfl.textContent = L.menuFile || "上傳檔案";
@@ -2466,6 +2486,7 @@
   function openSettings() {
     document.getElementById("settings-overlay").classList.remove("hidden");
     loadSettings();
+    loadMemory();
   }
   function closeSettings() {
     document.getElementById("settings-overlay").classList.add("hidden");
@@ -2501,6 +2522,41 @@
         body: JSON.stringify({ system_prompt: document.getElementById("sys-prompt-input").value.trim() }),
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
+      msgEl.textContent = t("settingsSaved");
+      setTimeout(() => { msgEl.textContent = ""; }, 2000);
+    } catch (e) {
+      msgEl.style.color = "var(--danger)";
+      msgEl.textContent = t("saveFail") + e.message;
+    }
+  }
+
+  async function loadMemory() {
+    if (!currentUser) return;
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${BASE_URL}/user/memory`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      document.getElementById("memory-display").value = data.memory || "";
+    } catch (_) {}
+  }
+
+  async function clearMemory() {
+    if (!currentUser) return;
+    if (!confirm(t("memoryClearConfirm"))) return;
+    const msgEl = document.getElementById("settings-msg");
+    msgEl.style.color = "var(--ok)";
+    msgEl.textContent = "";
+    try {
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`${BASE_URL}/user/memory`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      document.getElementById("memory-display").value = "";
       msgEl.textContent = t("settingsSaved");
       setTimeout(() => { msgEl.textContent = ""; }, 2000);
     } catch (e) {

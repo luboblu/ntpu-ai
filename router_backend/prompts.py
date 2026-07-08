@@ -25,7 +25,20 @@ JUDGE_SYSTEM_PROMPT = """你是一個路由決策模型，專門負責評估使�
 {"score": 數字, "route": "small|medium|large", "model": "模型 alias", "reason": "一句話說明"}"""
 
 
-def build_system_prompt(user_sys_prompt: str, has_tools: bool = False) -> str:
+MEMORY_COMPRESS_PROMPT = """你是使用者的長期記憶維護員。你的工作是把「既有的長期記憶摘要」與「這位使用者最近一段對話」合併，產生一份更新後的摘要。
+
+規則：
+- 只保留跨對話仍然有用的事實與偏好：使用者的身份／科系、常見需求、慣用的回答風格、正在進行的專案或長期目標等。
+- 不要逐輪覆述對話內容或流程，不要記錄一次性、已經結束的瑣事。
+- 若新對話內容與既有摘要衝突（例如使用者更正了先前提到的資訊），以新的為準。
+- 若既有摘要中有明顯過時或不再重要的內容，可以刪除。
+- 嚴格控制在 {max_chars} 字以內，寧可精簡也不要超過。
+- 若整體上沒有任何值得長期記住的新資訊，原樣輸出既有摘要即可（沒有摘要就輸出空字串）。
+
+只輸出更新後的摘要純文字，不要加任何前綴、說明或標題。"""
+
+
+def build_system_prompt(user_sys_prompt: str, has_tools: bool = False, long_term_memory: str = "") -> str:
     today = datetime.datetime.now(tz=datetime.timezone(datetime.timedelta(hours=8))).strftime("%Y-%m-%d")
     parts = [f"今天的日期是 {today}（台灣時間）。"]
     parts.append(
@@ -53,6 +66,11 @@ def build_system_prompt(user_sys_prompt: str, has_tools: bool = False) -> str:
             "你無法查詢即時資料，並建議點選輸入框旁的「＋」開啟「網路搜尋」"
             "或「NTPU 校內搜尋」功能後再問一次。切勿假裝已經搜尋，"
             "也不要用訓練資料編造最新公告、日期、活動或連結。"
+        )
+    if long_term_memory:
+        parts.append(
+            "以下是你過去與這位使用者互動時記住的長期資訊，可作為個人化回答的參考"
+            f"（若與使用者最新訊息衝突，以最新訊息為準）：\n{long_term_memory}"
         )
     if user_sys_prompt:
         parts.append(user_sys_prompt)

@@ -193,15 +193,27 @@ async def set_user_profile(uid: str, data: dict):
     await asyncio.to_thread(_fs_set_user_profile, uid, data)
 
 
-async def get_user_system_prompt(uid: str) -> str:
+async def get_user_profile_fields(uid: str) -> dict:
+    """回傳這位使用者的 profile doc（含 system_prompt、memory、
+    memory_updated_at 等欄位）；未設定 Firebase 或匿名一律回傳空 dict。
+    一次讀取整份文件，避免呼叫端各自讀一次同一份 doc。"""
     if not firebase_ready or uid == "anonymous":
-        return ""
+        return {}
     try:
-        profile = await get_user_profile(uid)
-        return profile.get("system_prompt", "")
+        return await get_user_profile(uid)
     except Exception:
-        logger.exception("讀取使用者 system_prompt 失敗")
-        return ""
+        logger.exception("讀取使用者 profile 失敗")
+        return {}
+
+
+def _fs_set_user_memory(uid: str, memory: str):
+    _db.collection("users").document(uid).set(
+        {"memory": memory, "memory_updated_at": fb_firestore.SERVER_TIMESTAMP},
+        merge=True)
+
+
+async def set_user_memory(uid: str, memory: str):
+    await asyncio.to_thread(_fs_set_user_memory, uid, memory)
 
 
 # ------------------------------------------------------------------

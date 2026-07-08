@@ -196,6 +196,26 @@ async def set_profile(data: UserProfileRequest, authorization: Optional[str] = H
     return {"ok": True}
 
 
+@app.get("/user/memory")
+async def get_memory(authorization: Optional[str] = Header(None)):
+    decoded = await decode_token(authorization)
+    uid = decoded.get("uid", "anonymous")
+    if uid == "anonymous":
+        return {"memory": ""}
+    profile = await store.get_user_profile(uid)
+    return {"memory": profile.get("memory", "")}
+
+
+@app.delete("/user/memory")
+async def clear_memory(authorization: Optional[str] = Header(None)):
+    decoded = await decode_token(authorization)
+    uid = decoded.get("uid", "anonymous")
+    if uid == "anonymous":
+        raise HTTPException(status_code=401)
+    await store.set_user_profile(uid, {"memory": "", "memory_updated_at": None})
+    return {"ok": True}
+
+
 # ------------------------------------------------------------------
 # 檔案上傳 / 預覽 / 語音轉文字
 # ------------------------------------------------------------------

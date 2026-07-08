@@ -95,6 +95,14 @@ TRANSCRIBE_MAX_BYTES = 25 * 1024 * 1024   # 25 MB（Whisper 上限）
 MAX_ANSWER_TOKENS    = 64000
 
 # ------------------------------------------------------------------
+# 跨對話長期記憶（時間週期壓縮，見 memory.py）
+# ------------------------------------------------------------------
+MEMORY_MODEL_ALIAS = os.environ.get("MEMORY_MODEL_ALIAS", JUDGE_MODEL_ALIAS)
+MEMORY_MAX_CHARS = int(os.environ.get("MEMORY_MAX_CHARS", "2000"))
+MEMORY_COMPRESS_INTERVAL_HOURS = float(os.environ.get("MEMORY_COMPRESS_INTERVAL_HOURS", "3"))
+MEMORY_MIN_MESSAGES_FOR_FIRST_COMPRESS = int(os.environ.get("MEMORY_MIN_MESSAGES_FOR_FIRST_COMPRESS", "8"))
+
+# ------------------------------------------------------------------
 # 安全設定
 # ------------------------------------------------------------------
 ALLOWED_DOMAINS = {"gm.ntpu.edu.tw", "ms.ntpu.edu.tw"}
