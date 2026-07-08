@@ -1825,7 +1825,10 @@
             } else if (evt.type === "done" && streamRow) {
               _finalizeStream(streamRow, fullText, judgeEvt, evt.answer_elapsed_ms);
               loadConversations();
-              refreshMemoryRing();
+              // 後端寫入這個對話的記憶狀態是背景非同步進行的，跟 done 事件幾乎
+              // 同時發生，馬上問常常會讀到還沒寫完的舊值；延遲一下再問，
+              // 之後每 20 秒的自動輪詢也會持續校正，不用等使用者重新整理
+              setTimeout(refreshMemoryRing, 1500);
             } else if (evt.type === "error") {
               document.getElementById("typing")?.remove();
               appendMsg("ai", "&#x26A0;&#xFE0F; " + evt.message);
@@ -2696,8 +2699,10 @@
       _memPendingSince = data.pending_since ? new Date(data.pending_since).getTime() : null;
       _memIntervalHours = data.interval_hours || 3;
       _renderMemoryRing();
+      // 每 20 秒真的重新問後端一次最新狀態（不是只在本機用舊資料空轉），
+      // 這樣不用重新整理頁面，圓圈也會自己跟上最新進度
       if (_memTickTimer) clearInterval(_memTickTimer);
-      _memTickTimer = setInterval(_renderMemoryRing, 30000);
+      _memTickTimer = setInterval(refreshMemoryRing, 20000);
     } catch (_) { _hideMemoryRing(); }
   }
 
