@@ -55,7 +55,7 @@ model_list:
 
   - model_name: cloud-medium-gemma
     litellm_params:
-      model: openrouter/google/gemma-4-27b-it
+      model: openrouter/google/gemma-4-31b-it
       api_key: os.environ/OPENROUTER_API_KEY
 
   - model_name: cloud-medium-llama
