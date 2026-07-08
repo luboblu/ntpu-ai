@@ -96,7 +96,7 @@ async def _answer_events(client: httpx.AsyncClient, model_alias: str,
         yield {"type": "final", "content": full_content, "usage": usage}
         return
 
-    full_content, usage = "", dict(_EMPTY_USAGE)
+    full_content, reasoning_fallback, usage = "", "", dict(_EMPTY_USAGE)
     async with stream_litellm(client, model_alias, messages) as resp:
         resp.raise_for_status()
         async for line in resp.aiter_lines():
@@ -116,10 +116,21 @@ async def _answer_events(client: httpx.AsyncClient, model_alias: str,
                          "output_tokens": u.get("completion_tokens", 0)}
             if chunk.get("choices"):
                 delta = chunk["choices"][0].get("delta", {})
-                content = delta.get("content") or delta.get("reasoning_content") or ""
+                # 推理模型（Nemotron Omni、gpt-oss 等）在正式作答前會先吐一段
+                # reasoning_content（內部思考過程，通常是英文），不能當成答案
+                # 顯示；只累積 content，reasoning_content 另外存著備用
+                content = delta.get("content") or ""
                 if content:
                     full_content += content
                     yield {"type": "token", "content": content}
+                else:
+                    reasoning_fallback += delta.get("reasoning_content") or ""
+    if not full_content and reasoning_fallback:
+        # 極端情況：整段回應都在推理階段就被截斷（例如 max_tokens 用完），
+        # 完全沒有輸出正式答案時，退而求其次顯示推理內容，避免整則訊息空白
+        full_content = reasoning_fallback
+        for piece in _chunk_text(full_content):
+            yield {"type": "token", "content": piece}
     yield {"type": "final", "content": full_content, "usage": usage}
 
 
