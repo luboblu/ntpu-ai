@@ -174,6 +174,29 @@ async def get_session_data(uid: str, session_id: str) -> dict:
 
 
 # ------------------------------------------------------------------
+# 長期記憶：每個 session 各自的「待壓縮」狀態（見 memory.py）
+# ------------------------------------------------------------------
+def _fs_get_session_memory_pending_since(uid: str, session_id: str):
+    doc = _db.collection("users").document(uid).collection("sessions").document(session_id).get()
+    return doc.to_dict().get("memory_pending_since") if doc.exists else None
+
+
+def _fs_set_session_memory_pending(uid: str, session_id: str, pending_since):
+    _db.collection("users").document(uid).collection("sessions").document(session_id).set(
+        {"memory_pending_since": pending_since}, merge=True)
+
+
+async def get_session_memory_pending_since(uid: str, session_id: str):
+    if not firebase_ready or uid == "anonymous":
+        return None
+    return await asyncio.to_thread(_fs_get_session_memory_pending_since, uid, session_id)
+
+
+async def set_session_memory_pending(uid: str, session_id: str, pending_since):
+    await asyncio.to_thread(_fs_set_session_memory_pending, uid, session_id, pending_since)
+
+
+# ------------------------------------------------------------------
 # 使用者 profile
 # ------------------------------------------------------------------
 def _fs_get_user_profile(uid: str) -> dict:

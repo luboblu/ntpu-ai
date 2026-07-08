@@ -115,28 +115,29 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
 `memory.py` 讓 AI 能記得使用者跨對話的背景與偏好，而不是每次都從零開始，
 同時避免無限制地把完整歷史塞進 prompt 造成 token 浪費：
 
-- **不是即時累積、而是時間週期壓縮**：平常每則訊息完全不會寫入記憶相關欄位
-  （原本就會讀 `users/{uid}` 這份 profile doc 拿 `system_prompt`，順便一起
-  拿 `memory`，零額外 Firestore 讀取）。只有距離上次壓縮超過
-  `MEMORY_COMPRESS_INTERVAL_HOURS`（預設 3 小時，效仿 Claude 的節奏）才會
-  在背景觸發一次：讀現有摘要 → 用目前這個 session 最近的內容壓縮合併 → 寫回
-  `memory` 欄位並蓋上 `memory_updated_at` 時間戳記。第一次壓縮則改用「這個
-  session 至少要有 `MEMORY_MIN_MESSAGES_FOR_FIRST_COMPRESS`（預設 8）則訊息」
-  當條件，避免帳號剛建立、只講一兩句話就急著壓縮出空洞的摘要。
+- **每個 session 各自狀態機，不會互相搶觸發機會**：每個 session 文件
+  （`users/{uid}/sessions/{session_id}`）有自己的 `memory_pending_since`
+  欄位，代表「這個 session 從什麼時候開始累積了新內容、還沒被折進長期記憶」。
+  空值＝乾淨狀態；有值＝正在等待。使用者同時開好幾個對話分頭聊時，每一個都
+  會各自被顧到，不會因為在別的 session 講話就被跳過。
+- **時間週期觸發，不是每則訊息都算**：某個 session 收到新訊息時：
+  - 若目前是乾淨狀態（`memory_pending_since` 為空）：只記下「現在開始算」的
+    時間戳記，這一輪不壓縮（狀態 0 → 1，代價很小，只是一次小欄位寫入）。
+  - 若已經在等待中、且還沒超過 `MEMORY_COMPRESS_INTERVAL_HOURS`（預設 3
+    小時，效仿 Claude 的節奏）：什麼都不做。
+  - 若已經在等待中、且超過時間門檻：讀現有摘要 → 用這個 session 最近的內容
+    壓縮合併 → 寫回 `memory` 欄位 → 清空 `memory_pending_since`（狀態
+    1 → 0），這一步才是真正花錢呼叫 LLM 的地方。
 - **背景執行、不卡回應**：跟 `store.log_usage_background()` 一樣是
   fire-and-forget，在 `chat.py` 的 `_persist()` 存完歷史後才觸發。
 - **壓縮出來的是摘要，不是逐字紀錄**：只保留跨對話仍然有用的事實與偏好
   （科系、身份、常見需求、回答風格偏好等），長度上限 `MEMORY_MAX_CHARS`
-  （預設 2000 字），每次新對話都會注入 system prompt。
+  （預設 2000 字），是所有 session 共用的同一份摘要，每次新對話都會注入
+  system prompt。
 - **壓縮模型**：預設沿用便宜的 `JUDGE_MODEL_ALIAS`，不需要改
   `litellm_config.yaml`；要換更強的模型可設定 `MEMORY_MODEL_ALIAS`。
 - **使用者可查看、可清除**：設定頁的「AI 記得關於你的事」對應
   `GET`/`DELETE /user/memory`，NTPU 學生用校園帳號登入，透明度是刻意的設計。
-- **已知簡化**：壓縮時只帶入「目前這個 session」最近一定則數的訊息，不會跨
-  session 掃描其他對話。如果使用者同時開好幾個對話分頭聊，只有剛好在時間門檻
-  觸發時「正在用」的那個 session 內容會被折進這一輪記憶，其他 session 要等
-  它自己下一次跨過門檻才會被處理——對一般「一次通常只專心聊一個對話」的使用
-  情境影響不大。
 
 ## 8. 安全設計
 
@@ -172,13 +173,15 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
   例如要加 OpenAI，只要在 `litellm_config.yaml` 新增 `cloud-small-openai`，再把它加入 `SMALL_MODEL_ALIASES`。
 - `MEMORY_COMPRESS_INTERVAL_HOURS`：長期記憶壓縮週期（預設 3 小時）。
 - `MEMORY_MAX_CHARS`：長期記憶摘要長度上限（預設 2000 字）。
-- `MEMORY_MIN_MESSAGES_FOR_FIRST_COMPRESS`：帳號第一次壓縮前至少要有幾則訊息（預設 8）。
 - `MEMORY_MODEL_ALIAS`：長期記憶壓縮用的模型（預設沿用 `JUDGE_MODEL_ALIAS`）。
 
 ## 10. 已知的簡化（正式上線前建議處理）
 
 - 速率限制是單機記憶體版，多 instance 部署時需換成 Redis 等集中式方案。
 - LiteLLM 只用 master key 一把金鑰；若要細緻的存取控制，可改用 LiteLLM 虛擬金鑰。
-- 長期記憶壓縮只看「目前這個 session」的內容，不會跨 session 掃描（見第 7 節）。
+- 長期記憶壓縮觸發時只把「觸發那一刻」的 session 內容折進去，不同 session 各
+  自獨立計時，理論上兩個 session 幾乎同時觸發壓縮時，讀改寫 `memory` 欄位不是
+  交易（transaction），較晚寫入的那個可能覆蓋掉較早的結果——實務上發生機率低，
+  且下一輪壓縮會自然帶入新內容，影響有限。
 - **前端只有一份正本 `frontend/index.html`**：Docker build context 已改為 repo 根目錄，
   Dockerfile 會把 `frontend/index.html` 打包成映像內的 `index.html`，後端以 `FileResponse` serve。
