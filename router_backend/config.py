@@ -66,8 +66,12 @@ MODEL_NOTES = {
     "cloud-medium-gemma": "Gemma 4 31B（OpenRouter）：Google 開源模型，高 CP 值，通用推理與程式能力均衡，適合中等任務",
     "cloud-medium-llama": "Llama 3.3 70B（OpenRouter）：開源模型、成本低，適合中等難度的一般任務",
     "cloud-medium-nemotron": "Llama 3.3 Nemotron Super 49B（NVIDIA）：NVIDIA 調校，推理與指令遵循佳，支援工具呼叫，適合中等任務",
+    "cloud-medium-grok-build": "Grok Build 0.1（OpenRouter）：xAI 快速 agentic coding 模型，適合互動式程式任務",
+    "cloud-medium-grok43": "Grok 4.3（OpenRouter）：xAI 推理模型，事實準確度高，適合一般推理與指令遵循任務",
     "cloud-large-claude": "Claude Opus 4.8：高品質深度推理、長任務與複雜 coding",
     "cloud-large-gemini": "Gemini 2.5 Pro：深度推理與 coding，適合複雜任務",
+    "cloud-large-grok420": "Grok 4.20（OpenRouter）：xAI 旗艦模型，低幻覺率、強 agentic tool calling，適合深度推理與複雜任務",
+    "cloud-large-grok420-agent": "Grok 4.20 Multi-Agent（OpenRouter）：xAI 多代理協作模型，適合深度研究與需要多步驟協調的複雜任務",
 }
 
 MODEL_TO_ROUTE = {

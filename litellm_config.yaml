@@ -69,6 +69,30 @@ model_list:
       model: nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1
       api_key: os.environ/NVIDIA_NIM_API_KEY
 
+  # xAI Grok（OpenRouter）：Build 0.1 主打快速 agentic coding、4.3 是一般推理模型，
+  # 定價與定位都落在 medium 級距（比其他 medium 候選貴，但遠比 large 旗艦模型便宜）
+  - model_name: cloud-medium-grok-build
+    litellm_params:
+      model: openrouter/x-ai/grok-build-0.1
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-medium-grok43
+    litellm_params:
+      model: openrouter/x-ai/grok-4.3
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  # xAI Grok 旗艦款（OpenRouter）：4.20 主打低幻覺率／強 agentic tool calling，
+  # multi-agent 版本專攻深度研究與多代理協作，兩者都對標 large 級距的頂級模型
+  - model_name: cloud-large-grok420
+    litellm_params:
+      model: openrouter/x-ai/grok-4.20
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-large-grok420-agent
+    litellm_params:
+      model: openrouter/x-ai/grok-4.20-multi-agent
+      api_key: os.environ/OPENROUTER_API_KEY
+
   # 範例：如果想讓 small 級距多一個 OpenAI 候選模型，可以加下面這樣
   # 並把 SMALL_MODEL_ALIASES 加上 cloud-small-openai（同時要在環境變數設定 OPENAI_API_KEY）：
   # - model_name: cloud-small-openai
