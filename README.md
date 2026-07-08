@@ -135,8 +135,10 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
   （科系、身份、常見需求、回答風格偏好等），長度上限 `MEMORY_MAX_CHARS`
   （預設 2000 字），是所有 session 共用的同一份摘要，每次新對話都會注入
   system prompt。
-- **壓縮模型**：預設沿用便宜的 `JUDGE_MODEL_ALIAS`，不需要改
-  `litellm_config.yaml`；要換更強的模型可設定 `MEMORY_MODEL_ALIAS`。
+- **壓縮模型**：正式環境設定 `MEMORY_MODEL_ALIAS=memory-model`（Gemini 2.5
+  Flash，繁中摘要品質較穩）；跟高頻的 judge（Mistral Small 4，省錢重點）刻意
+  拆開——記憶壓縮每人每 3 小時才跑一次，用量極小，品質優先。未設定時預設
+  沿用 `JUDGE_MODEL_ALIAS`。
 - **使用者可查看、可清除**：設定頁的「AI 記得關於你的事」對應
   `GET`/`DELETE /user/memory`，NTPU 學生用校園帳號登入，透明度是刻意的設計。
 
@@ -174,7 +176,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000 &
   例如要加 OpenAI，只要在 `litellm_config.yaml` 新增 `cloud-small-openai`，再把它加入 `SMALL_MODEL_ALIASES`。
 - `MEMORY_COMPRESS_INTERVAL_HOURS`：長期記憶壓縮週期（預設 3 小時）。
 - `MEMORY_MAX_CHARS`：長期記憶摘要長度上限（預設 2000 字）。
-- `MEMORY_MODEL_ALIAS`：長期記憶壓縮用的模型（預設沿用 `JUDGE_MODEL_ALIAS`）。
+- `MEMORY_MODEL_ALIAS`：長期記憶壓縮用的模型（正式環境設為 `memory-model` = Gemini 2.5 Flash；未設定時沿用 `JUDGE_MODEL_ALIAS`）。
 
 ## 10. 已知的簡化（正式上線前建議處理）
 

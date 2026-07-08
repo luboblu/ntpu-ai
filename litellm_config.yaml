@@ -18,6 +18,13 @@ model_list:
       model: openrouter/mistralai/mistral-small-2603
       api_key: os.environ/OPENROUTER_API_KEY
 
+  # 長期記憶壓縮：留在 Gemini 2.5 Flash —— 繁中摘要品質較穩，且每人每 3 小時
+  # 才跑一次、用量極小，省它沒有意義；判斷難度的高頻 judge 才是省錢重點
+  - model_name: memory-model
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
   - model_name: cloud-small-claude
     litellm_params:
       model: anthropic/claude-haiku-4-5

@@ -30,6 +30,7 @@ services:
       - LITELLM_BASE_URL=http://litellm:4000
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:?請在 .env 設定 LITELLM_MASTER_KEY}
       - JUDGE_MODEL_ALIAS=judge-model
+      - MEMORY_MODEL_ALIAS=memory-model
       - SMALL_MODEL_ALIASES=cloud-small-claude,cloud-small-gemini
       - MEDIUM_MODEL_ALIASES=cloud-medium-claude,cloud-medium-gemini
       - LARGE_MODEL_ALIASES=cloud-large-claude,cloud-large-gemini
