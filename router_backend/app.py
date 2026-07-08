@@ -146,7 +146,8 @@ async def share_conversation(session_id: str, authorization: Optional[str] = Hea
     title = next((store.content_str(m["content"])[:40] for m in history if m["role"] == "user"), "對話")
     public_history = [
         {"role": m["role"], "content": m["content"],
-         "_route": m.get("_route"), "_score": m.get("_score"), "_reason": m.get("_reason"),
+         "_route": m.get("_route"), "_model": m.get("_model"),
+         "_score": m.get("_score"), "_reason": m.get("_reason"),
          "_file_name": m.get("_file_name")}
         for m in history
     ]

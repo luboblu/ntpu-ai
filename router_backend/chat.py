@@ -146,7 +146,8 @@ async def _persist(uid: str, email: str, req: ChatRequest, history: list,
     new_history = history + [
         user_entry,
         {"role": "assistant", "content": full_content,
-         "_route": route, "_score": judge["score"], "_reason": judge.get("reason", "")},
+         "_route": route, "_model": model_alias,
+         "_score": judge["score"], "_reason": judge.get("reason", "")},
     ]
     await store.save_history(uid, req.session_id, new_history)
 

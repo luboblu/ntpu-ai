@@ -1249,7 +1249,7 @@
         appendMsg("user", m.content, null, m._file_name ? { name: m._file_name, mime: m._file_mime_type, gcsPath: m._file_gcs_path || "" } : null);
       } else if (m.role === "assistant") {
         const data = m._route ? {
-          route: m._route,
+          route: m._route, model: m._model,
           judge: { score: m._score || 5, reason: m._reason || "" },
           judge_elapsed_ms: 0, answer_elapsed_ms: 0, no_timing: true,
         } : null;
@@ -1908,9 +1908,9 @@
       usersColCreated:  "建立時間",
       usersColAction:   "操作",
       convGroups:       ["今天","昨天","過去 7 天","更早"],
-      badgeSmall:       "Haiku（小模型）",
-      badgeMedium:      "Sonnet（中模型）",
-      badgeLarge:       "Opus（大模型）",
+      badgeSmall:       "小模型",
+      badgeMedium:      "中模型",
+      badgeLarge:       "大模型",
       badgeTiny:        "開源模型",
       judgeToggle:      "難度分析 ▾",
       judgeScore:       "本次評分",
@@ -2061,9 +2061,9 @@
       usersColCreated:  "Created",
       usersColAction:   "Actions",
       convGroups:       ["Today","Yesterday","Past 7 days","Earlier"],
-      badgeSmall:       "Haiku (small)",
-      badgeMedium:      "Sonnet (medium)",
-      badgeLarge:       "Opus (large)",
+      badgeSmall:       "Small model",
+      badgeMedium:      "Medium model",
+      badgeLarge:       "Large model",
       badgeTiny:        "Open-source",
       judgeToggle:      "Difficulty ▾",
       judgeScore:       "Score",
