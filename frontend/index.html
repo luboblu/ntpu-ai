@@ -217,25 +217,49 @@
   .toggle-btn:hover { background: var(--sidebar-hover); }
   .header h1 { font-size: 15px; font-weight: 600; color: var(--text); flex: 1; display: flex; align-items: center; gap: 8px; }
   .app-logo { flex-shrink: 0; border-radius: 5px; }
-  /* ── Sidebar footer（帳號與設定，ChatGPT 式左下角）── */
+  /* ── Sidebar footer（帳號與設定，點擊展開選單，ChatGPT 式左下角）── */
   .sidebar-foot {
+    position: relative;
     border-top: 1px solid var(--border);
-    padding: 10px;
-    display: flex; align-items: center; gap: 2px;
+    padding: 8px;
     flex-shrink: 0;
   }
+  .user-row {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+    padding: 6px 8px; border-radius: 10px; border: none; background: transparent;
+    cursor: pointer; text-align: left; transition: background .15s;
+  }
+  .user-row:hover { background: var(--sidebar-hover); }
+  .user-avatar {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--accent);
+    color: var(--bg); display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; flex-shrink: 0; text-transform: uppercase;
+  }
   .user-email {
-    flex: 1; min-width: 0; font-size: 12px; color: var(--text4);
+    flex: 1; min-width: 0; font-size: 13px; color: var(--text2);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    padding-right: 4px;
   }
-  .foot-btn {
-    width: 30px; height: 30px; border-radius: 8px; border: none;
-    background: transparent; color: var(--text3); cursor: pointer;
-    font-size: 13px; display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; transition: background .15s;
+  .user-row-chevron { flex-shrink: 0; color: var(--text4); transition: transform .15s; }
+  .user-row.open .user-row-chevron { transform: rotate(180deg); }
+
+  .user-menu {
+    position: absolute; bottom: calc(100% + 6px); left: 8px; right: 8px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.16);
+    padding: 6px; z-index: 40;
   }
-  .foot-btn:hover { background: var(--sidebar-hover); color: var(--text2); }
+  .user-menu.hidden { display: none; }
+  .user-menu-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+    border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text2);
+    transition: background .12s;
+  }
+  .user-menu-item svg { flex-shrink: 0; color: var(--text3); }
+  .user-menu-item:hover { background: var(--sidebar-hover); }
+  .user-menu-item.danger { color: var(--danger); }
+  .user-menu-item.danger svg { color: var(--danger); }
+  .user-menu-divider { height: 1px; background: var(--border); margin: 6px 4px; }
+  .user-menu-value { margin-left: auto; color: var(--text4); font-size: 12px; flex-shrink: 0; }
   #adminBtn { display: none; }
 
   /* ── Messages ── */
@@ -910,19 +934,37 @@
   <div class="conv-list" id="convList">
     <div class="conv-empty">尚無對話記錄</div>
   </div>
-  <!-- 帳號與設定區（ChatGPT 式左下角）-->
+  <!-- 帳號與設定區（點擊展開選單，ChatGPT 式）-->
   <div class="sidebar-foot">
-    <span class="user-email" id="user-email"></span>
-    <button class="foot-btn" id="adminBtn" onclick="openAdmin()" title="管理員">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-    </button>
-    <button class="foot-btn" id="settingsBtn" onclick="openSettings()" title="設定">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
-    <button class="foot-btn" id="langToggle" title="Switch language">中</button>
-    <button class="foot-btn" id="darkToggle" title="切換夜色模式"></button>
-    <button class="foot-btn" id="logoutBtn" title="登出">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    <div class="user-menu hidden" id="userMenu">
+      <div class="user-menu-item" id="adminBtn" onclick="openAdmin()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span id="userMenuAdminLabel">管理員</span>
+      </div>
+      <div class="user-menu-item" id="settingsBtn" onclick="openSettings()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span id="userMenuSettingsLabel">設定</span>
+      </div>
+      <div class="user-menu-item" id="langToggle">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span id="userMenuLangLabel">語言</span>
+        <span class="user-menu-value" id="userMenuLangValue">中文</span>
+      </div>
+      <div class="user-menu-item" id="darkToggle">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <span id="userMenuDarkLabel">外觀</span>
+        <span class="user-menu-value" id="userMenuDarkValue">淺色</span>
+      </div>
+      <div class="user-menu-divider"></div>
+      <div class="user-menu-item danger" id="logoutBtn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span id="userMenuLogoutLabel">登出</span>
+      </div>
+    </div>
+    <button class="user-row" id="userRowBtn">
+      <span class="user-avatar" id="userAvatar">U</span>
+      <span class="user-email" id="user-email"></span>
+      <svg class="user-row-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
     </button>
   </div>
 </div>
@@ -1137,6 +1179,7 @@
 
       document.getElementById("auth-overlay").classList.add("hidden");
       document.getElementById("user-email").textContent = user.email;
+      document.getElementById("userAvatar").textContent = (user.email || "?").charAt(0);
       const key = `ai_session_${user.uid}`;
       const savedSid = localStorage.getItem(key);
       sessionId = savedSid || newSession(user.uid);
@@ -1146,7 +1189,7 @@
         const result = await user.getIdTokenResult(true);
         isAdmin = result.claims.admin === true;
       } catch (_) { isAdmin = false; }
-      document.getElementById("adminBtn").style.display = isAdmin ? "inline-flex" : "none";
+      document.getElementById("adminBtn").style.display = isAdmin ? "flex" : "none";
 
       await loadConversations();
 
@@ -1965,6 +2008,10 @@
       analyzeFile:      "（請分析上傳的檔案）",
       darkTitle:        "切換夜色模式",
       langLabel:        "中",
+      userMenuDark:     "外觀",
+      darkValueOn:      "深色",
+      darkValueOff:     "淺色",
+      userMenuLang:     "語言",
       deleteConfirm:    (email) => `確定要刪除 ${email} 嗎？此操作無法復原。`,
       adminConfirm:     (action) => `確定要${action}嗎？`,
       adminAction_promote: "設為管理員",
@@ -2121,6 +2168,10 @@
       analyzeFile:      "(Please analyze the uploaded file)",
       darkTitle:        "Toggle dark mode",
       langLabel:        "EN",
+      userMenuDark:     "Appearance",
+      darkValueOn:      "Dark",
+      darkValueOff:     "Light",
+      userMenuLang:     "Language",
       deleteConfirm:    (email) => `Are you sure you want to delete ${email}? This cannot be undone.`,
       adminConfirm:     (action) => `Are you sure you want to ${action}?`,
       adminAction_promote: "make admin",
@@ -2173,11 +2224,13 @@
     document.title = L.title;
     const appTitle = document.getElementById("app-title");
     if (appTitle) appTitle.textContent = L.title;
-    document.getElementById("logoutBtn").title = L.logoutBtn;  // 圖示按鈕，文字放 tooltip
+    document.getElementById("userMenuLogoutLabel").textContent = L.logoutBtn;
     document.getElementById("newChatBtn").textContent = L.newChatBtn;
-    document.getElementById("darkToggle").title = L.darkTitle;
-    document.getElementById("langToggle").textContent = L.langLabel;
-    document.getElementById("langToggle").title = _lang === "zh" ? "Switch to English" : "切換為中文";
+    document.getElementById("userMenuDarkLabel").textContent = L.userMenuDark;
+    document.getElementById("userMenuDarkValue").textContent =
+      document.body.classList.contains("dark") ? L.darkValueOn : L.darkValueOff;
+    document.getElementById("userMenuLangLabel").textContent = L.userMenuLang;
+    document.getElementById("userMenuLangValue").textContent = _lang === "zh" ? "中文" : "English";
     document.getElementById("input").placeholder = L.placeholder;
     document.querySelector(".hint").textContent = L.hint;
     // Auth
@@ -2186,8 +2239,7 @@
     document.getElementById("google-btn-text").textContent = L.googleSignIn;
     document.getElementById("auth-domain-hint").textContent = L.authDomainHint;
     // Admin panel
-    const adminBtn = document.getElementById("adminBtn");
-    if (adminBtn) adminBtn.title = L.adminBtn;  // 圖示按鈕，文字放 tooltip
+    document.getElementById("userMenuAdminLabel").textContent = L.adminBtn;
     document.querySelector(".admin-header h2").textContent = L.adminPanelTitle;
     const tabBtns = document.querySelectorAll(".tab-btn");
     if (tabBtns.length >= 3) {
@@ -2292,7 +2344,6 @@
   const darkToggle = document.getElementById("darkToggle");
   function applyDark(on) {
     document.body.classList.toggle("dark", on);
-    darkToggle.innerHTML = on ? ICONS.sun : ICONS.moon;
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", on ? "#212121" : "#ffffff");
   }
   applyDark(localStorage.getItem("dark") === "1");
@@ -2300,6 +2351,7 @@
     const on = !document.body.classList.contains("dark");
     localStorage.setItem("dark", on ? "1" : "0");
     applyDark(on);
+    applyLang(); // 順便更新選單裡「深色／淺色」的狀態文字
   };
 
   // ── Lang toggle ──
@@ -2310,6 +2362,28 @@
     localStorage.setItem("lang", _lang);
     applyLang();
   };
+
+  // ── User menu（點左下角帳號列展開/收合）──
+  const userRowBtn = document.getElementById("userRowBtn");
+  const userMenu = document.getElementById("userMenu");
+  userRowBtn.onclick = (e) => {
+    e.stopPropagation();
+    const willOpen = userMenu.classList.contains("hidden");
+    userMenu.classList.toggle("hidden", !willOpen);
+    userRowBtn.classList.toggle("open", willOpen);
+  };
+  userMenu.querySelectorAll(".user-menu-item").forEach(item => {
+    item.addEventListener("click", () => {
+      userMenu.classList.add("hidden");
+      userRowBtn.classList.remove("open");
+    });
+  });
+  document.addEventListener("click", (e) => {
+    if (!userMenu.classList.contains("hidden") && !userMenu.contains(e.target) && e.target !== userRowBtn) {
+      userMenu.classList.add("hidden");
+      userRowBtn.classList.remove("open");
+    }
+  });
 
   window.addEventListener("pageshow", () => { ta.value = ""; ta.style.height = "auto"; });
   ta.addEventListener("keydown", e => {
@@ -2897,7 +2971,7 @@
       // Force token refresh to get new admin claim
       await currentUser.getIdToken(true);
       isAdmin = true;
-      document.getElementById("adminBtn").style.display = "inline-flex";
+      document.getElementById("adminBtn").style.display = "flex";
       showAdminTabs(true);
       switchTab("stats");
     } catch (e) {
