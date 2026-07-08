@@ -72,6 +72,17 @@ MODEL_NOTES = {
     "cloud-large-gemini": "Gemini 2.5 Pro：深度推理與 coding，適合複雜任務",
     "cloud-large-grok420": "Grok 4.20（OpenRouter）：xAI 旗艦模型，低幻覺率、強 agentic tool calling，適合深度推理與複雜任務",
     "cloud-large-grok420-agent": "Grok 4.20 Multi-Agent（OpenRouter）：xAI 多代理協作模型，適合深度研究與需要多步驟協調的複雜任務",
+    # ── OpenRouter 免費模型（零成本，但通常有較嚴格的 rate limit）──
+    "cloud-small-gpt-oss20": "gpt-oss-20b（OpenAI，OpenRouter 免費）：OpenAI 開源小模型，適合簡單問答與短任務",
+    "cloud-small-gemma-free": "Gemma 4 26B A4B（Google，OpenRouter 免費）：輕量 MoE 模型，適合大量輕量任務",
+    "cloud-small-nemotron-nano9": "Nemotron Nano 9B（NVIDIA，OpenRouter 免費）：小型開源模型，適合簡單任務",
+    "cloud-small-nemotron-nano12vl": "Nemotron Nano 12B VL（NVIDIA，OpenRouter 免費）：支援圖片輸入的多模態小模型",
+    "cloud-medium-gpt-oss120": "gpt-oss-120b（OpenAI，OpenRouter 免費）：OpenAI 開源模型，推理能力佳，適合中等任務",
+    "cloud-medium-gemma-free": "Gemma 4 31B（Google，OpenRouter 免費）：跟付費版同規模，適合中等任務、預算有限時優先使用",
+    "cloud-medium-nemotron-nano30": "Nemotron 3 Nano 30B（NVIDIA，OpenRouter 免費）：中型開源模型，適合中等難度任務",
+    "cloud-medium-nemotron-omni": "Nemotron 3 Nano Omni（NVIDIA，OpenRouter 免費）：強化推理版本，適合需要多步驟思考的中等任務",
+    "cloud-large-nemotron-super120": "Nemotron 3 Super 120B（NVIDIA，OpenRouter 免費）：大型開源模型，適合深度推理任務",
+    "cloud-large-nemotron-ultra550": "Nemotron 3 Ultra 550B（NVIDIA，OpenRouter 免費）：NVIDIA 旗艦開源模型，1M context，適合最複雜的深度任務",
 }
 
 MODEL_TO_ROUTE = {

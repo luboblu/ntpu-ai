@@ -93,6 +93,58 @@ model_list:
       model: openrouter/x-ai/grok-4.20-multi-agent
       api_key: os.environ/OPENROUTER_API_KEY
 
+  # ── OpenRouter 免費模型（:free 後綴，零成本，但通常有較嚴格的 rate limit，
+  # 且免費層有時會被拿去訓練，正式環境高流量時請留意）──
+  - model_name: cloud-small-gpt-oss20
+    litellm_params:
+      model: openrouter/openai/gpt-oss-20b:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-small-gemma-free
+    litellm_params:
+      model: openrouter/google/gemma-4-26b-a4b-it:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-small-nemotron-nano9
+    litellm_params:
+      model: openrouter/nvidia/nemotron-nano-9b-v2:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-small-nemotron-nano12vl
+    litellm_params:
+      model: openrouter/nvidia/nemotron-nano-12b-v2-vl:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-medium-gpt-oss120
+    litellm_params:
+      model: openrouter/openai/gpt-oss-120b:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-medium-gemma-free
+    litellm_params:
+      model: openrouter/google/gemma-4-31b-it:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-medium-nemotron-nano30
+    litellm_params:
+      model: openrouter/nvidia/nemotron-3-nano-30b-a3b:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-medium-nemotron-omni
+    litellm_params:
+      model: openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-large-nemotron-super120
+    litellm_params:
+      model: openrouter/nvidia/nemotron-3-super-120b-a12b:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: cloud-large-nemotron-ultra550
+    litellm_params:
+      model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
   # 範例：如果想讓 small 級距多一個 OpenAI 候選模型，可以加下面這樣
   # 並把 SMALL_MODEL_ALIASES 加上 cloud-small-openai（同時要在環境變數設定 OPENAI_API_KEY）：
   # - model_name: cloud-small-openai
