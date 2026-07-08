@@ -63,12 +63,11 @@ MODEL_NOTES = {
     "cloud-small-gpt": "GPT-4o mini（OpenRouter）：便宜快速，適合簡單問答與短任務",
     "cloud-medium-claude": "Claude Sonnet 5：品質穩定，適合一般推理、寫作與程式任務",
     "cloud-medium-gemini": "Gemini 3.5 Flash：低延遲且能力均衡，適合中等複雜任務",
-    "cloud-medium-deepseek": "DeepSeek V3（OpenRouter）：高 CP 值、成本低，通用推理與程式能力強，適合中等任務",
+    "cloud-medium-gemma": "Gemma 4 27B（OpenRouter）：Google 開源模型，高 CP 值，通用推理與程式能力均衡，適合中等任務",
     "cloud-medium-llama": "Llama 3.3 70B（OpenRouter）：開源模型、成本低，適合中等難度的一般任務",
     "cloud-medium-nemotron": "Llama 3.3 Nemotron Super 49B（NVIDIA）：NVIDIA 調校，推理與指令遵循佳，支援工具呼叫，適合中等任務",
     "cloud-large-claude": "Claude Opus 4.8：高品質深度推理、長任務與複雜 coding",
     "cloud-large-gemini": "Gemini 2.5 Pro：深度推理與 coding，適合複雜任務",
-    "cloud-large-r1": "DeepSeek R1（OpenRouter）：強推理模型、成本低，適合數學證明與多步推理（不擅長工具呼叫）",
 }
 
 MODEL_TO_ROUTE = {
@@ -77,9 +76,10 @@ MODEL_TO_ROUTE = {
     for alias in aliases
 }
 
-# 不支援 function calling 的模型（例如 DeepSeek R1）；啟用搜尋工具時要避開，
-# 否則工具呼叫會失敗。可用環境變數覆寫。
-NO_TOOL_MODELS = set(_alias_list(os.environ.get("NO_TOOL_MODELS", "cloud-large-r1")))
+# 不支援 function calling 的模型；啟用搜尋工具時要避開，否則工具呼叫會失敗。
+# 目前候選模型清單中沒有已知不支援的模型，之後加入新模型若不支援 function
+# calling，直接用環境變數列出其 alias（逗號分隔）即可。
+NO_TOOL_MODELS = set(_alias_list(os.environ.get("NO_TOOL_MODELS", "")))
 
 # ------------------------------------------------------------------
 # 其他服務金鑰 / 參數
