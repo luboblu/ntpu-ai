@@ -914,6 +914,8 @@
             <option value="cloud-large-grok420-agent">Grok 4.20 Multi-Agent（大模型）</option>
             <option value="cloud-large-nemotron-super120">Nemotron 3 Super 120B 免費（大模型）</option>
             <option value="cloud-large-nemotron-ultra550">Nemotron 3 Ultra 550B 免費（大模型）</option>
+            <option value="local-large-gemma4">Gemma 4（地端・大模型）</option>
+            <option value="local-large-gpt-oss">GPT-OSS（地端・大模型）</option>
             <option value="tiny">強制開源小模型</option>
           </select>
         </div>
@@ -1981,6 +1983,8 @@
       cfgForceLargeGrok420Agent: "Grok 4.20 Multi-Agent（大模型）",
       cfgForceLargeNemotronSuper120: "Nemotron 3 Super 120B 免費（大模型）",
       cfgForceLargeNemotronUltra550: "Nemotron 3 Ultra 550B 免費（大模型）",
+      cfgForceLocalGemma4:  "Gemma 4（地端・大模型）",
+      cfgForceLocalGptOss:  "GPT-OSS（地端・大模型）",
       cfgForceTiny:     "強制開源小模型",
       saveBtn:          "儲存設定",
       cfgSaved:         "✓ 設定已儲存，約 30 秒後生效",
@@ -2141,6 +2145,8 @@
       cfgForceLargeGrok420Agent: "Grok 4.20 Multi-Agent (large)",
       cfgForceLargeNemotronSuper120: "Nemotron 3 Super 120B free (large)",
       cfgForceLargeNemotronUltra550: "Nemotron 3 Ultra 550B free (large)",
+      cfgForceLocalGemma4:  "Gemma 4 (local, large)",
+      cfgForceLocalGptOss:  "GPT-OSS (local, large)",
       cfgForceTiny:     "Force open-source model",
       saveBtn:          "Save Settings",
       cfgSaved:         "✓ Settings saved. Takes effect in ~30 seconds.",
@@ -2312,6 +2318,8 @@
       "cloud-large-grok420-agent": L.cfgForceLargeGrok420Agent,
       "cloud-large-nemotron-super120": L.cfgForceLargeNemotronSuper120,
       "cloud-large-nemotron-ultra550": L.cfgForceLargeNemotronUltra550,
+      "local-large-gemma4":   L.cfgForceLocalGemma4,
+      "local-large-gpt-oss":  L.cfgForceLocalGptOss,
       "tiny":                 L.cfgForceTiny,
     };
     document.querySelectorAll("#cfg-force-model option").forEach(o => {
