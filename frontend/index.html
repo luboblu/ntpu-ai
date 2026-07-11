@@ -400,13 +400,6 @@
   }
   .attach-remove:hover { color: var(--text2); }
   .input-row { display: flex; align-items: center; gap: 6px; padding: 8px 10px 8px 12px; }
-  .local-model-select {
-    flex-shrink: 0; max-width: 132px; padding: 5px 8px;
-    border: 1px solid var(--border3); border-radius: 8px;
-    font-size: 12px; color: var(--text3); background: var(--bg2);
-    cursor: pointer; outline: none;
-  }
-  .local-model-select:focus { border-color: var(--text4); }
   .attach-btn {
     width: 34px; height: 34px; border-radius: 50%; border: none;
     background: transparent; color: var(--text3); cursor: pointer;
@@ -1027,11 +1020,6 @@
           </div>
         </div>
         <input type="file" id="fileInput" style="display:none" />
-        <select class="local-model-select" id="localModelSelect" title="選用地端模型（資料不經第三方雲端）">
-          <option value="">自動路由</option>
-          <option value="local-large-gemma4">Gemma 4（地端）</option>
-          <option value="local-large-gpt-oss">GPT-OSS（地端）</option>
-        </select>
         <button class="memory-ring-btn hidden" id="memoryRingBtn">
           <svg width="18" height="18" viewBox="0 0 36 36">
             <circle class="memory-ring-bg" cx="18" cy="18" r="15.5" fill="none" stroke-width="3"/>
@@ -1851,7 +1839,6 @@
           file_name:      attachedFile?.filename   || null,
           search_enabled: _searchEnabled,
           ntpu_search_enabled: _ntpuSearchEnabled,
-          local_model:    document.getElementById("localModelSelect").value || null,
         }),
         signal: _abortCtrl.signal,
       });
