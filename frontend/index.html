@@ -1112,7 +1112,12 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 
 <script>
-  const BASE_URL = "https://ntpu-router-158606109353.asia-east1.run.app";
+  // 後端網址自動偵測：頁面由後端自己 serve（正式站 Cloud Run 或本機
+  // uvicorn 都是），直接用同源即可，本機測試不用再手動改這裡；
+  // 只有直接用 file:// 開啟 index.html 時才退回寫死的正式站網址。
+  const BASE_URL = location.protocol === "file:"
+    ? "https://ntpu-router-158606109353.asia-east1.run.app"
+    : location.origin;
 
   // ── 共用單色線條圖示（取代 emoji；stroke 用 currentColor，自動跟隨按鈕文字色）──
   const _svg = (inner, size = 16) =>

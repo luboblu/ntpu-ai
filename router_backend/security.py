@@ -12,13 +12,20 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import store
 from config import ALLOWED_DOMAINS
 
+# 本機開發專用旁路：Firebase 未設定（匿名模式）時，允許把自己當管理員
+# 測試管理員面板（例如驗證地端模型路由設定）。正式環境一定有 Firebase，
+# 此旁路不會生效。
+_DEV_FORCE_ADMIN = os.environ.get("DEV_FORCE_ADMIN", "").lower() in ("1", "true", "yes")
+
 
 # ------------------------------------------------------------------
 # Token 驗證
 # ------------------------------------------------------------------
 async def decode_token(authorization: Optional[str]) -> dict:
     if not store.firebase_ready:
-        return {"uid": "anonymous", "email": ""}
+        return {"uid": "dev-admin" if _DEV_FORCE_ADMIN else "anonymous",
+                "email": "dev@localhost" if _DEV_FORCE_ADMIN else "",
+                "admin": _DEV_FORCE_ADMIN}
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth token")
     try:

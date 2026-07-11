@@ -40,7 +40,7 @@ from config import (
     UPLOAD_MAX_BYTES,
     UPLOAD_RATE_LIMIT_PER_MINUTE,
 )
-from routing import get_routing_config, invalidate_routing_cache
+from routing import get_routing_config, save_routing_config
 from schemas import ChatRequest, RoutingConfig, UserProfileRequest
 from security import (
     RateLimiter,
@@ -374,8 +374,7 @@ async def admin_get_config(authorization: Optional[str] = Header(None)):
 @app.post("/admin/config")
 async def admin_set_config(config: RoutingConfig, authorization: Optional[str] = Header(None)):
     await require_admin(authorization)
-    await store.save_routing_config(config.model_dump())
-    invalidate_routing_cache()
+    await save_routing_config(config.model_dump())
     return {"ok": True}
 
 

@@ -51,6 +51,18 @@ def invalidate_routing_cache():
     _routing_cache_ts = 0
 
 
+async def save_routing_config(data: dict):
+    """儲存路由設定；未接 Firebase（本機開發）時直接寫入記憶體快取，
+    否則管理員面板的設定永遠存不進去（get_routing_config 在無 Firebase
+    時只讀記憶體，不會去讀 Firestore）。"""
+    global _routing_cache
+    if not store.firebase_ready:
+        _routing_cache = dict(data)
+        return
+    await store.save_routing_config(data)
+    invalidate_routing_cache()
+
+
 # ------------------------------------------------------------------
 # 級距 / 模型選擇
 # ------------------------------------------------------------------
