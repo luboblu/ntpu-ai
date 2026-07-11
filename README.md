@@ -37,18 +37,26 @@ LiteLLM Proxy（OpenAI 相容介面）
 模型清單由 `GET /models` 端點對外提供（來源是 `config.py`），前端啟動時會自動同步，
 新增模型（含地端 `local-*`）不需要改前端。
 
-## 2. 地端模型通道（已預留）
+## 2. 地端模型通道（已啟用）
 
-alias 以 `local-` 開頭即被視為地端模型。之後接 Ollama / vLLM 時：
+alias 以 `local-` 開頭即被視為地端模型。有兩種接法：
 
-1. 在 `litellm_config.yaml` 取消「地端模型通道」區塊的註解（已附 Ollama 與 vLLM 範例），
-   設定 `OLLAMA_BASE_URL` 或 `VLLM_BASE_URL`。
-2. 在 router 後端環境變數填入對應級距的 alias，例如
-   `LOCAL_SMALL_MODEL_ALIASES=local-small-llama`。
-3. 管理員面板（或 `POST /admin/config`）開啟 `prefer_local`，
-   該級距有地端候選時就會優先走地端，資料不出機房。
+**A. 地端主機在正式站以外的網路（目前採用）**：地端機器自己跑一套
+LiteLLM + Ollama，經 Cloudflare Tunnel 對外（完整設定見
+`docs/cloudflare-tunnel-setup.md`），router 後端直接打該公開端點：
 
-前端與其餘路由邏輯完全不用動。
+1. 設定 `LOCAL_LLM_BASE_URL`（例如 `https://llm.example.com/v1`）、
+   `LOCAL_LLM_API_KEY`（地端 LiteLLM 的 master key），以及 Cloudflare
+   Access Service Token（`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`）。
+2. 把地端 alias 填進級距，例如
+   `LOCAL_LARGE_MODEL_ALIASES=local-large-gemma4,local-large-gpt-oss`。
+3. 使用者可直接在輸入框旁的下拉選單自選地端模型（不需管理員權限，
+   選定後跳過 judge 直接回答）；管理員也可用 `prefer_local` 讓該級距
+   自動優先走地端。
+
+**B. 地端模型與 router 同網路**：在 `litellm_config.yaml` 取消「地端模型
+通道」區塊的註解（已附 Ollama 與 vLLM 範例），不設定 `LOCAL_LLM_BASE_URL`，
+local-* alias 就照常走主要的 LITELLM_BASE_URL。
 
 ## 3. 啟動方式（原生安裝，不使用 Docker）
 

@@ -12,6 +12,9 @@ class ChatRequest(BaseModel):
     file_name:      Optional[str] = None
     search_enabled: bool = False
     ntpu_search_enabled: bool = False
+    # 使用者自選地端模型（選填）；後端只接受 local-* alias，避免一般使用者
+    # 透過此欄位強制指定昂貴的雲端大模型，繞過難度分級與成本控管。
+    local_model: Optional[str] = None
 
 
 class RoutingConfig(BaseModel):

@@ -49,6 +49,18 @@ def is_local_alias(alias: str) -> bool:
     return alias.startswith(LOCAL_MODEL_PREFIX)
 
 
+# 地端模型走獨立的 LiteLLM 端點（例如經 Cloudflare Tunnel 對外的
+# https://llm.example.com/v1），不透過主要的 LITELLM_BASE_URL 轉發，
+# 因為地端主機通常跟正式站不在同一個網路，需要額外的閘道驗證
+# （Cloudflare Access Service Token，經由下面兩個 header 帶入）。
+# 未設定 LOCAL_LLM_BASE_URL 時，local-* alias 一樣走 LITELLM_BASE_URL
+# （例如地端模型其實由同一個 LiteLLM 實例代管的情況）。
+LOCAL_LLM_BASE_URL = os.environ.get("LOCAL_LLM_BASE_URL", "")
+LOCAL_LLM_API_KEY  = os.environ.get("LOCAL_LLM_API_KEY", LITELLM_API_KEY)
+CF_ACCESS_CLIENT_ID     = os.environ.get("CF_ACCESS_CLIENT_ID", "")
+CF_ACCESS_CLIENT_SECRET = os.environ.get("CF_ACCESS_CLIENT_SECRET", "")
+
+
 MODEL_CANDIDATES: dict[str, list[str]] = {
     "small":  _alias_list(SMALL_MODEL_ALIASES)  + _alias_list(LOCAL_SMALL_MODEL_ALIASES),
     "medium": _alias_list(MEDIUM_MODEL_ALIASES) + _alias_list(LOCAL_MEDIUM_MODEL_ALIASES),
@@ -83,6 +95,9 @@ MODEL_NOTES = {
     "cloud-medium-nemotron-omni": "Nemotron 3 Nano Omni（NVIDIA，OpenRouter 免費）：強化推理版本，適合需要多步驟思考的中等任務",
     "cloud-large-nemotron-super120": "Nemotron 3 Super 120B（NVIDIA，OpenRouter 免費）：大型開源模型，適合深度推理任務",
     "cloud-large-nemotron-ultra550": "Nemotron 3 Ultra 550B（NVIDIA，OpenRouter 免費）：NVIDIA 旗艦開源模型，1M context，適合最複雜的深度任務",
+    # ── 地端模型（自架主機，經 Cloudflare Tunnel 對外；見 docs/cloudflare-tunnel-setup.md）──
+    "local-large-gemma4": "Gemma 4（地端）：跑在自架主機上的開源模型，資料不經第三方雲端",
+    "local-large-gpt-oss": "gpt-oss-20b（地端）：跑在自架主機上的 OpenAI 開源模型，資料不經第三方雲端",
 }
 
 MODEL_TO_ROUTE = {

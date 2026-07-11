@@ -1,23 +1,51 @@
-"""LiteLLM Proxy 的呼叫封裝：一般呼叫、串流、tool-calling 迴圈。"""
+"""LiteLLM Proxy 的呼叫封裝：一般呼叫、串流、tool-calling 迴圈。
+
+雲端模型走 LITELLM_BASE_URL；地端模型（local-* alias）走獨立的
+LOCAL_LLM_BASE_URL（通常是經 Cloudflare Tunnel 對外的自架 LiteLLM），
+並額外帶 Cloudflare Access Service Token 通過閘道驗證。
+"""
 import json
 import logging
 
 import httpx
 
-from config import LITELLM_API_KEY, LITELLM_BASE_URL, MAX_ANSWER_TOKENS
+from config import (
+    CF_ACCESS_CLIENT_ID,
+    CF_ACCESS_CLIENT_SECRET,
+    LITELLM_API_KEY,
+    LITELLM_BASE_URL,
+    LOCAL_LLM_API_KEY,
+    LOCAL_LLM_BASE_URL,
+    MAX_ANSWER_TOKENS,
+    is_local_alias,
+)
 from tools import run_search_tool
 
 logger = logging.getLogger("router.llm")
 
-_AUTH_HEADERS = {"Authorization": f"Bearer {LITELLM_API_KEY}"}
-_COMPLETIONS_URL = f"{LITELLM_BASE_URL}/v1/chat/completions"
+_CLOUD_HEADERS = {"Authorization": f"Bearer {LITELLM_API_KEY}"}
+_CLOUD_URL = f"{LITELLM_BASE_URL}/v1/chat/completions"
+
+_LOCAL_HEADERS = {"Authorization": f"Bearer {LOCAL_LLM_API_KEY}"}
+if CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET:
+    _LOCAL_HEADERS["CF-Access-Client-Id"] = CF_ACCESS_CLIENT_ID
+    _LOCAL_HEADERS["CF-Access-Client-Secret"] = CF_ACCESS_CLIENT_SECRET
+_LOCAL_URL = f"{LOCAL_LLM_BASE_URL}/chat/completions" if LOCAL_LLM_BASE_URL else _CLOUD_URL
+
 STREAM_TIMEOUT = httpx.Timeout(connect=30, read=300, write=30, pool=10)
+
+
+def _endpoint_for(model_alias: str) -> tuple[str, dict]:
+    """依 alias 決定要打哪個 LiteLLM 端點與 headers。"""
+    if LOCAL_LLM_BASE_URL and is_local_alias(model_alias):
+        return _LOCAL_URL, _LOCAL_HEADERS
+    return _CLOUD_URL, _CLOUD_HEADERS
 
 
 async def _chat_completion(client: httpx.AsyncClient, payload: dict) -> dict:
     """非串流 chat completion，回傳解析後的 JSON。"""
-    resp = await client.post(_COMPLETIONS_URL, headers=_AUTH_HEADERS,
-                             json=payload, timeout=120)
+    url, headers = _endpoint_for(payload.get("model", ""))
+    resp = await client.post(url, headers=headers, json=payload, timeout=120)
     resp.raise_for_status()
     return resp.json()
 
@@ -56,10 +84,11 @@ async def call_litellm(client: httpx.AsyncClient, model_alias: str, messages: li
 def stream_litellm(client: httpx.AsyncClient, model_alias: str, messages: list,
                    max_tokens: int = MAX_ANSWER_TOKENS):
     """回傳可 async with 的串流 request（SSE），由呼叫端解析 chunk。"""
+    url, headers = _endpoint_for(model_alias)
     return client.stream(
         "POST",
-        _COMPLETIONS_URL,
-        headers=_AUTH_HEADERS,
+        url,
+        headers=headers,
         json={"model": model_alias, "messages": messages, "max_tokens": max_tokens,
               "stream": True, "stream_options": {"include_usage": True}},
         timeout=STREAM_TIMEOUT,

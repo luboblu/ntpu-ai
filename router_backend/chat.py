@@ -13,7 +13,7 @@ import httpx
 import memory
 import store
 from attachments import build_user_content
-from config import HISTORY_LIMIT, JUDGE_MODEL_ALIAS, TAVILY_KEY
+from config import HISTORY_LIMIT, JUDGE_MODEL_ALIAS, MODEL_TO_ROUTE, TAVILY_KEY, is_local_alias
 from llm import run_tools, stream_litellm
 from prompts import build_system_prompt
 from routing import (
@@ -44,14 +44,26 @@ async def _decide_model(client: httpx.AsyncClient, req: ChatRequest,
                         llm_history: list, config: dict, is_admin: bool):
     """Judge 評估難度後選定模型；啟用工具時避開不支援 function calling 的模型。
 
+    使用者在輸入框自選地端模型（req.local_model，僅接受已註冊的 local-*
+    alias）時直接鎖定該模型並跳過 judge——地端模型不需要難度分級，
+    也省下一次 judge 呼叫的成本與延遲。
+
     回傳 (route, model_alias, judge, judge_elapsed_ms, tools)。
     """
-    t0 = time.time()
-    judge = await model_classify(client, req.message, llm_history)
-    judge_elapsed_ms = int((time.time() - t0) * 1000)
+    user_local_model = req.local_model if (req.local_model and is_local_alias(req.local_model)
+                                           and req.local_model in MODEL_TO_ROUTE) else None
+    if user_local_model:
+        route, model_alias = MODEL_TO_ROUTE[user_local_model], user_local_model
+        judge = {"score": 0.0, "route": route, "model": model_alias,
+                 "reason": "使用者指定地端模型，未經過難度判斷"}
+        judge_elapsed_ms = 0
+    else:
+        t0 = time.time()
+        judge = await model_classify(client, req.message, llm_history)
+        judge_elapsed_ms = int((time.time() - t0) * 1000)
 
-    force = config.get("force_model") if is_admin else None
-    route, model_alias = select_route(config, judge, force)
+        force = config.get("force_model") if is_admin else None
+        route, model_alias = select_route(config, judge, force)
 
     tools = build_search_tools(req) if TAVILY_KEY else []
     if tools:

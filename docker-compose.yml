@@ -34,10 +34,16 @@ services:
       - SMALL_MODEL_ALIASES=cloud-small-claude,cloud-small-gemini
       - MEDIUM_MODEL_ALIASES=cloud-medium-claude,cloud-medium-gemini
       - LARGE_MODEL_ALIASES=cloud-large-claude,cloud-large-gemini
-      # 地端模型 alias（選填；接上 Ollama/vLLM 後填入，例如 local-small-llama）
+      # 地端模型 alias（選填；接上 Ollama/vLLM 後填入，例如 local-large-gemma4,local-large-gpt-oss）
       - LOCAL_SMALL_MODEL_ALIASES=${LOCAL_SMALL_MODEL_ALIASES:-}
       - LOCAL_MEDIUM_MODEL_ALIASES=${LOCAL_MEDIUM_MODEL_ALIASES:-}
       - LOCAL_LARGE_MODEL_ALIASES=${LOCAL_LARGE_MODEL_ALIASES:-}
+      # 地端模型獨立端點（選填；地端主機經 Cloudflare Tunnel 對外時設定，
+      # 例如 https://llm.example.com/v1；見 docs/cloudflare-tunnel-setup.md）
+      - LOCAL_LLM_BASE_URL=${LOCAL_LLM_BASE_URL:-}
+      - LOCAL_LLM_API_KEY=${LOCAL_LLM_API_KEY:-}
+      - CF_ACCESS_CLIENT_ID=${CF_ACCESS_CLIENT_ID:-}
+      - CF_ACCESS_CLIENT_SECRET=${CF_ACCESS_CLIENT_SECRET:-}
       # 以下為選填；未設定時後端會降級（無 Firebase → 匿名、無金鑰 → 停用對應功能）
       - TINY_MODEL_ALIAS=${TINY_MODEL_ALIAS:-}
       - GCS_BUCKET=${GCS_BUCKET:-ntpu-ai-uploads}
