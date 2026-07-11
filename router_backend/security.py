@@ -23,9 +23,9 @@ _DEV_FORCE_ADMIN = os.environ.get("DEV_FORCE_ADMIN", "").lower() in ("1", "true"
 # ------------------------------------------------------------------
 async def decode_token(authorization: Optional[str]) -> dict:
     if not store.firebase_ready:
-        return {"uid": "dev-admin" if _DEV_FORCE_ADMIN else "anonymous",
-                "email": "dev@localhost" if _DEV_FORCE_ADMIN else "",
-                "admin": _DEV_FORCE_ADMIN}
+        # uid 維持 anonymous，讓所有「匿名就跳過 Firestore」的既有保護照常生效；
+        # DEV_FORCE_ADMIN 只額外授予 admin，用來在本機測試管理員面板
+        return {"uid": "anonymous", "email": "", "admin": _DEV_FORCE_ADMIN}
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth token")
     try:
@@ -104,7 +104,7 @@ _DEFAULT_CSP = (
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: blob: https:; "
     "media-src 'self' data: blob:; "
-    "connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com; "
+    "connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://www.gstatic.com; "
     "frame-src https://*.firebaseapp.com https://accounts.google.com; "
     "object-src 'none'; base-uri 'self'; form-action 'self'"
 )

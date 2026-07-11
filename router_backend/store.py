@@ -349,6 +349,8 @@ def _fs_get_stats(start_dt: datetime.datetime, end_dt: datetime.datetime) -> dic
 
 
 async def get_stats(start_dt: datetime.datetime, end_dt: datetime.datetime) -> dict:
+    if not firebase_ready:
+        return {"users": [], "by_model": []}
     return await asyncio.to_thread(_fs_get_stats, start_dt, end_dt)
 
 
@@ -371,6 +373,8 @@ def _fs_list_auth_users() -> list:
 
 
 async def list_auth_users() -> list:
+    if not firebase_ready:
+        return []
     return await asyncio.to_thread(_fs_list_auth_users)
 
 
