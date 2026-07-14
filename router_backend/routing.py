@@ -120,6 +120,13 @@ def select_route(config: dict, judge: dict, force: Optional[str]) -> tuple[str, 
     if force in MODEL_TO_ROUTE:
         return MODEL_TO_ROUTE[force], force
 
+    # 管理介面的模型清單可能比目前部署的環境變數新。過去遇到這種情況
+    # 會忽略 force，繼續讓 judge 選模型，造成管理員明明指定地端模型，
+    # 畫面最後卻顯示 Claude。強制值存在但未註冊時必須明確失敗，不能
+    # 靜默改用其他模型。
+    if force and force not in ("small", "medium", "large", "tiny"):
+        raise ValueError(f"強制模型 {force} 尚未在目前環境註冊")
+
     if force in ("small", "medium", "large", "tiny"):
         route = force
     elif requested_route in MODEL_CANDIDATES:

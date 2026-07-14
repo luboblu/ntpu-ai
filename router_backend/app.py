@@ -374,6 +374,14 @@ async def admin_get_config(authorization: Optional[str] = Header(None)):
 @app.post("/admin/config")
 async def admin_set_config(config: RoutingConfig, authorization: Optional[str] = Header(None)):
     await require_admin(authorization)
+    force = config.force_model
+    tiers = {"small", "medium", "large", "tiny"}
+    registered_models = {alias for aliases in MODEL_CANDIDATES.values() for alias in aliases}
+    if force and force not in tiers and force not in registered_models:
+        raise HTTPException(
+            status_code=400,
+            detail=f"模型 {force} 尚未在目前環境註冊；請先設定對應的模型環境變數",
+        )
     await save_routing_config(config.model_dump())
     return {"ok": True}
 

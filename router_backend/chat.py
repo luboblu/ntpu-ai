@@ -50,8 +50,12 @@ async def _decide_model(client: httpx.AsyncClient, req: ChatRequest,
 
     回傳 (route, model_alias, judge, judge_elapsed_ms, tools)。
     """
-    user_local_model = req.local_model if (req.local_model and is_local_alias(req.local_model)
-                                           and req.local_model in MODEL_TO_ROUTE) else None
+    if req.local_model:
+        if not is_local_alias(req.local_model):
+            raise ValueError("只能透過 local_model 指定地端模型")
+        if req.local_model not in MODEL_TO_ROUTE:
+            raise ValueError(f"地端模型 {req.local_model} 尚未在目前環境註冊")
+    user_local_model = req.local_model
     if user_local_model:
         route, model_alias = MODEL_TO_ROUTE[user_local_model], user_local_model
         judge = {"score": 0.0, "route": route, "model": model_alias,
@@ -210,6 +214,10 @@ async def stream_chat(req: ChatRequest, decoded: dict):
 
             await _persist(uid, email, req, history, full_content,
                            route, model_alias, judge, judge_usage, answer_usage)
+    except ValueError as exc:
+        logger.warning("chat_stream 模型設定無效 uid=%s session=%s error=%s",
+                       uid, req.session_id, exc)
+        yield sse({"type": "error", "message": str(exc)})
     except Exception:
         logger.exception("chat_stream 失敗 uid=%s session=%s", uid, req.session_id)
         yield sse({"type": "error", "message": "系統暫時無法回應，請稍後再試"})

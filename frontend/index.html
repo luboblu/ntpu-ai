@@ -1523,6 +1523,17 @@
           }
         }
       }
+      // 靜態 HTML 可能保留尚未在目前部署註冊的模型。將這些選項停用，
+      // 避免管理員誤以為已經能用；後端也會再次驗證，防止繞過 UI。
+      const available = new Set(Object.values(data.candidates || {}).flat());
+      document.querySelectorAll("#cfg-force-model option").forEach(option => {
+        const value = option.value;
+        if (!value || ["small", "medium", "large", "tiny"].includes(value)) return;
+        if (!available.has(value)) {
+          option.disabled = true;
+          option.textContent += "（尚未設定）";
+        }
+      });
     } catch (_) {}
   })();
 
@@ -2489,7 +2500,11 @@
       const res   = await fetch(`${BASE_URL}/admin/stats?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, {
         headers: { "Authorization": `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("HTTP " + res.status);
+      if (!res.ok) {
+        let detail = "HTTP " + res.status;
+        try { detail = (await res.json()).detail || detail; } catch (_) {}
+        throw new Error(detail);
+      }
       const data = await res.json();
       const users = data.users || [];
       const byModel = data.by_model || [];
@@ -2602,7 +2617,11 @@
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("HTTP " + res.status);
+      if (!res.ok) {
+        let detail = "HTTP " + res.status;
+        try { detail = (await res.json()).detail || detail; } catch (_) {}
+        throw new Error(detail);
+      }
       msgEl.textContent = t("cfgSaved");
     } catch (e) {
       msgEl.style.color = "var(--danger)";
