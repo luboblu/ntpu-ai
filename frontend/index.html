@@ -400,6 +400,39 @@
   }
   .attach-remove:hover { color: var(--text2); }
   .input-row { display: flex; align-items: center; gap: 6px; padding: 8px 10px 8px 12px; }
+
+  /* ── 引用提問（選取訊息文字 → 詢問）── */
+  .quote-float-btn {
+    position: fixed; z-index: 180;
+    display: none; align-items: center; gap: 6px;
+    padding: 6px 12px; border: 1px solid var(--border3); border-radius: 999px;
+    background: var(--bg2); color: var(--text2); font-size: 13px; font-weight: 500;
+    cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    user-select: none;
+  }
+  .quote-float-btn:hover { background: var(--sidebar-hover); }
+  .quote-bar {
+    display: none; align-items: flex-start; gap: 8px;
+    padding: 10px 16px 0;
+  }
+  .quote-bar.show { display: flex; }
+  .quote-bar-text {
+    flex: 1; min-width: 0; font-size: 12.5px; color: var(--text3);
+    border-left: 3px solid var(--border3); padding-left: 10px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; line-height: 1.5; word-break: break-word;
+  }
+  .quote-bar-remove {
+    flex-shrink: 0; background: none; border: none; cursor: pointer;
+    color: var(--text5); font-size: 14px; line-height: 1; padding: 2px;
+  }
+  .quote-bar-remove:hover { color: var(--text2); }
+  .msg-quote {
+    font-size: 12.5px; color: var(--text3);
+    border-left: 3px solid var(--border3); padding: 2px 0 2px 10px;
+    margin-bottom: 6px; white-space: pre-wrap; word-break: break-word;
+    max-height: 4.6em; overflow: hidden; max-width: 100%;
+  }
   .attach-btn {
     width: 34px; height: 34px; border-radius: 50%; border: none;
     background: transparent; color: var(--text3); cursor: pointer;
@@ -998,6 +1031,7 @@
 
   <div class="input-area">
     <div class="input-wrap">
+      <div class="quote-bar" id="quoteBar"></div>
       <div class="attach-preview" id="attachPreview"></div>
       <div class="input-row">
         <div class="attach-menu-wrap">
@@ -1091,6 +1125,9 @@
     <div class="preview-loading">載入中…</div>
   </div>
 </div>
+
+<!-- 引用提問的浮動按鈕（選取訊息文字時出現）-->
+<button class="quote-float-btn" id="quoteFloatBtn">⤷ 引用提問</button>
 
 <!-- Markdown -->
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
@@ -1331,7 +1368,7 @@
       }
       const m = history[i];
       if (m.role === "user") {
-        appendMsg("user", m.content, null, m._file_name ? { name: m._file_name, mime: m._file_mime_type, gcsPath: m._file_gcs_path || "" } : null);
+        appendMsg("user", m.content, null, m._file_name ? { name: m._file_name, mime: m._file_mime_type, gcsPath: m._file_gcs_path || "" } : null, m._quote || null);
       } else if (m.role === "assistant") {
         const data = m._route ? {
           route: m._route, model: m._model,
@@ -1575,7 +1612,7 @@
     </div>`;
   }
 
-  function appendMsg(role, text, data, fileInfo) {
+  function appendMsg(role, text, data, fileInfo, quote) {
     document.getElementById("welcome")?.remove();
     const inner = document.querySelector("#messages .inner");
     const row = document.createElement("div");
@@ -1602,9 +1639,11 @@
 
     const isAI = role === "ai";
     const fileCardHtml = !isAI ? _buildFileCard(fileInfo) : "";
+    const quoteHtml = (!isAI && quote) ? `<div class="msg-quote">${_esc(quote)}</div>` : "";
     row.innerHTML = `
       <div class="avatar ${role}">${role === "user" ? t("userAvatar") : t("aiAvatar")}</div>
       <div class="msg-body">
+        ${quoteHtml}
         ${fileCardHtml}
         <div class="bubble${isAI ? " md" : ""}">${isAI ? marked.parse(text) : text.replace(/</g, "&lt;")}</div>
         ${metaHtml}
@@ -1696,6 +1735,55 @@
   let _searchQuotaExceeded = false;
   let _ntpuSearchEnabled = false;
   const sendBtn          = document.getElementById("sendBtn");
+
+  // ── 引用提問（選取訊息文字 → 詢問）──
+  let _quotedText = "";
+  const quoteFloatBtn = document.getElementById("quoteFloatBtn");
+  const quoteBar      = document.getElementById("quoteBar");
+
+  function _hideQuoteBtn() { quoteFloatBtn.style.display = "none"; }
+
+  document.addEventListener("selectionchange", () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) _hideQuoteBtn();
+  });
+
+  document.getElementById("messages").addEventListener("mouseup", () => {
+    // 等瀏覽器把選取範圍定案再讀，否則拿到的是舊值
+    setTimeout(() => {
+      const sel = window.getSelection();
+      const text = sel ? sel.toString().trim() : "";
+      if (!text || text.length < 2 || !sel.rangeCount) { _hideQuoteBtn(); return; }
+      // 只在訊息泡泡內的選取才顯示按鈕
+      const node = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement);
+      if (!node || !node.closest(".bubble")) { _hideQuoteBtn(); return; }
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      quoteFloatBtn.style.display = "flex";
+      quoteFloatBtn.style.left = Math.max(8, rect.left + rect.width / 2 - 48) + "px";
+      quoteFloatBtn.style.top  = Math.max(8, rect.top - 42) + "px";
+      quoteFloatBtn.dataset.text = text.slice(0, 4000);
+    }, 0);
+  });
+
+  // 用 mousedown + preventDefault，避免點按鈕的瞬間選取先被清掉
+  quoteFloatBtn.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    _quotedText = quoteFloatBtn.dataset.text || "";
+    _renderQuoteBar();
+    _hideQuoteBtn();
+    window.getSelection()?.removeAllRanges();
+    ta.focus();
+  });
+
+  function _renderQuoteBar() {
+    if (!_quotedText) { quoteBar.classList.remove("show"); quoteBar.innerHTML = ""; return; }
+    quoteBar.innerHTML = `<div class="quote-bar-text">${_esc(_quotedText)}</div>
+      <button class="quote-bar-remove" onclick="clearQuote()" title="移除引用">✕</button>`;
+    quoteBar.classList.add("show");
+  }
+
+  function clearQuote() { _quotedText = ""; _renderQuoteBar(); }
 
   // ── Attach dropdown ──
   const attachBtn  = document.getElementById("attachBtn");
@@ -1828,8 +1916,10 @@
     clearInput(); setTimeout(clearInput, 0);
     const attachedFile = pendingFile;
     clearAttachPreview();
+    const quotedText = _quotedText;
+    clearQuote();
     const fileInfo = attachedFile ? { name: attachedFile.filename, mime: attachedFile.mime_type, size: attachedFile.size, gcsPath: attachedFile.gcs_path } : null;
-    appendMsg("user", text || t("noFile"), null, fileInfo);
+    appendMsg("user", text || t("noFile"), null, fileInfo, quotedText);
     showTyping();
     _abortCtrl = new AbortController();
 
@@ -1850,6 +1940,7 @@
           file_name:      attachedFile?.filename   || null,
           search_enabled: _searchEnabled,
           ntpu_search_enabled: _ntpuSearchEnabled,
+          quote:          quotedText || null,
         }),
         signal: _abortCtrl.signal,
       });

@@ -15,6 +15,8 @@ class ChatRequest(BaseModel):
     # 使用者自選地端模型（選填）；後端只接受 local-* alias，避免一般使用者
     # 透過此欄位強制指定昂貴的雲端大模型，繞過難度分級與成本控管。
     local_model: Optional[str] = None
+    # 引用提問（選填）：使用者選取先前訊息中的一段文字後針對它提問
+    quote: Optional[str] = Field(default=None, max_length=8_000)
 
 
 class RoutingConfig(BaseModel):

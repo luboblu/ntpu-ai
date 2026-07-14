@@ -81,9 +81,14 @@ async def _decide_model(client: httpx.AsyncClient, req: ChatRequest,
 
 async def _build_answer_messages(uid: str, req: ChatRequest, llm_history: list,
                                  has_tools: bool) -> list:
+    # 引用提問：把使用者選取的引用段落連同問題一起給模型
+    message = req.message
+    if req.quote:
+        message = (f"使用者引用了對話中的這段內容提問：\n\"\"\"\n{req.quote}\n\"\"\"\n\n"
+                   f"{req.message}")
     profile, user_content = await asyncio.gather(
         store.get_user_profile_fields(uid),
-        build_user_content(req.message, req.file_gcs_path, req.file_mime_type),
+        build_user_content(message, req.file_gcs_path, req.file_mime_type),
     )
     messages = [{"role": "system", "content": build_system_prompt(
         profile.get("system_prompt", ""), has_tools=has_tools,
@@ -155,6 +160,8 @@ async def _persist(uid: str, email: str, req: ChatRequest, history: list,
                    judge_usage: dict, answer_usage: dict):
     """寫入對話歷史；已登入使用者另外在背景記錄 token 用量、視情況壓縮長期記憶。"""
     user_entry: dict = {"role": "user", "content": req.message}
+    if req.quote:
+        user_entry["_quote"] = req.quote
     if req.file_name:
         user_entry["_file_name"]      = req.file_name
         user_entry["_file_mime_type"] = req.file_mime_type or ""
