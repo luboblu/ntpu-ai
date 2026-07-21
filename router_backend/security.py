@@ -33,18 +33,41 @@ async def decode_token(authorization: Optional[str]) -> dict:
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid auth token")
 
-    # 網域限制套用到所有非管理員，不分登入方式（google / password 一視同仁），
-    # 避免有人用 email/password 自行註冊任意信箱繞過「僅限 NTPU 帳號」的限制。
+    # 網域限制套用到所有非管理員，不分登入方式（google / email-link 一視同仁），
+    # 避免有人自行用任意信箱繞過「僅限 NTPU 帳號」的限制。
+    # 例外：Firebase 裡「本來就已經存在、且先前登入過」的帳號（例如既有的 Google
+    # 管理員帳號）不受網域限制，允許繼續登入；只有「第一次登入＝新註冊」才卡網域。
     if not decoded.get("admin"):
         email = decoded.get("email", "")
         domain = email.split("@")[-1] if "@" in email else ""
-        if domain not in ALLOWED_DOMAINS:
+        if domain not in ALLOWED_DOMAINS and not await _is_pre_existing_account(decoded.get("uid", "")):
             raise HTTPException(
                 status_code=403,
-                detail="僅限 NTPU 師生帳號（@gm.ntpu.edu.tw）登入",
+                detail="僅限 NTPU 師生帳號（@gm.ntpu.edu.tw / @ms.ntpu.edu.tw）註冊登入",
             )
 
     return decoded
+
+
+async def _is_pre_existing_account(uid: str) -> bool:
+    """判斷這個 uid 是否「先前就登入過」（非本次才第一次建立的新帳號）。
+
+    Firebase 帳號在建立當下 creation_timestamp == last_sign_in_timestamp；
+    之後每次登入 last_sign_in_timestamp 都會更新，兩者不同即代表帳號並非
+    這次登入才剛註冊，屬於既有帳號，不受 NTPU 網域限制。
+    """
+    if not uid:
+        return False
+    try:
+        user_record = await asyncio.to_thread(fb_auth.get_user, uid)
+    except Exception:
+        return False
+    meta = user_record.user_metadata
+    return bool(
+        meta.creation_timestamp
+        and meta.last_sign_in_timestamp
+        and meta.last_sign_in_timestamp > meta.creation_timestamp
+    )
 
 
 async def verify_token(authorization: Optional[str] = Header(None)) -> str:

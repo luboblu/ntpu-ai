@@ -60,6 +60,23 @@ LOCAL_LLM_API_KEY  = os.environ.get("LOCAL_LLM_API_KEY", LITELLM_API_KEY)
 CF_ACCESS_CLIENT_ID     = os.environ.get("CF_ACCESS_CLIENT_ID", "")
 CF_ACCESS_CLIENT_SECRET = os.environ.get("CF_ACCESS_CLIENT_SECRET", "")
 
+# Router 對外使用穩定、可讀的 local-* alias；送到地端 OpenAI 相容服務前，
+# 再轉成該服務實際註冊的 model id。可用環境變數覆寫或新增映射：
+# LOCAL_MODEL_NAME_MAP=local-large-gemma4=gemma4-31b,local-large-gpt-oss=gpt-oss-20b
+def _model_name_map(raw: str) -> dict[str, str]:
+    result = {}
+    for item in raw.split(","):
+        alias, sep, provider_name = item.strip().partition("=")
+        if sep and alias and provider_name:
+            result[alias] = provider_name
+    return result
+
+
+LOCAL_MODEL_NAME_MAP = _model_name_map(os.environ.get(
+    "LOCAL_MODEL_NAME_MAP",
+    "local-large-gemma4=gemma4-31b,local-large-gpt-oss=gpt-oss-20b",
+))
+
 
 MODEL_CANDIDATES: dict[str, list[str]] = {
     "small":  _alias_list(SMALL_MODEL_ALIASES)  + _alias_list(LOCAL_SMALL_MODEL_ALIASES),
@@ -89,7 +106,7 @@ MODEL_NOTES = {
     "cloud-small-gemma-free": "Gemma 4 26B A4B（Google，OpenRouter 免費）：輕量 MoE 模型，適合大量輕量任務",
     "cloud-small-nemotron-nano9": "Nemotron Nano 9B（NVIDIA，OpenRouter 免費）：小型開源模型，適合簡單任務",
     "cloud-small-nemotron-nano12vl": "Nemotron Nano 12B VL（NVIDIA，OpenRouter 免費）：支援圖片輸入的多模態小模型",
-    "cloud-medium-gpt-oss120": "gpt-oss-120b（OpenAI，OpenRouter 免費）：OpenAI 開源模型，推理能力佳，適合中等任務",
+    "cloud-medium-gpt-oss120": "gpt-oss-120b（OpenAI，OpenRouter）：OpenAI 開源模型，推理能力佳，適合中等任務",
     "cloud-medium-gemma-free": "Gemma 4 31B（Google，OpenRouter 免費）：跟付費版同規模，適合中等任務、預算有限時優先使用",
     "cloud-medium-nemotron-nano30": "Nemotron 3 Nano 30B（NVIDIA，OpenRouter 免費）：中型開源模型，適合中等難度任務",
     "cloud-medium-nemotron-omni": "Nemotron 3 Nano Omni（NVIDIA，OpenRouter 免費）：強化推理版本，適合需要多步驟思考的中等任務",
@@ -110,6 +127,23 @@ MODEL_TO_ROUTE = {
 # 目前候選模型清單中沒有已知不支援的模型，之後加入新模型若不支援 function
 # calling，直接用環境變數列出其 alias（逗號分隔）即可。
 NO_TOOL_MODELS = set(_alias_list(os.environ.get("NO_TOOL_MODELS", "")))
+
+# 免費 OpenRouter 模型保留在完整候選清單中，供管理介面顯示與日後重新開放；
+# 但暫不參與 Judge、自動路由或管理員強制指定，避免共享容量的 429 讓聊天失敗。
+AUTO_EXCLUDED_MODELS = set(_alias_list(os.environ.get(
+    "AUTO_EXCLUDED_MODELS",
+    ",".join([
+        "cloud-small-gpt-oss20",
+        "cloud-small-gemma-free",
+        "cloud-small-nemotron-nano9",
+        "cloud-small-nemotron-nano12vl",
+        "cloud-medium-gemma-free",
+        "cloud-medium-nemotron-nano30",
+        "cloud-medium-nemotron-omni",
+        "cloud-large-nemotron-super120",
+        "cloud-large-nemotron-ultra550",
+    ]),
+)))
 
 # ------------------------------------------------------------------
 # 其他服務金鑰 / 參數

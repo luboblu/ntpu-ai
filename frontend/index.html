@@ -87,6 +87,18 @@
     display: flex; align-items: center; justify-content: center;
   }
   #auth-overlay.hidden { display: none; }
+  .auth-card .hidden { display: none; }
+  .auth-tabs {
+    display: flex; gap: 4px; margin-bottom: 18px;
+    background: var(--bg3); border-radius: 9px; padding: 3px;
+  }
+  .auth-tab {
+    flex: 1; padding: 7px 0; border: none; border-radius: 6px;
+    background: transparent; color: var(--text4);
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .auth-tab.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
   .auth-card {
     background: var(--auth-bg); border-radius: 16px;
     padding: 36px 32px; width: 380px; max-width: 94vw;
@@ -125,6 +137,7 @@
   }
   .auth-input:focus { border-color: var(--text4); }
   .auth-err { font-size: 12px; color: var(--danger); min-height: 18px; margin-bottom: 8px; }
+  .auth-err.info { color: var(--text3); }
   .auth-btn {
     width: 100%; padding: 10px; border-radius: 8px;
     font-size: 14px; font-weight: 600; cursor: pointer;
@@ -835,17 +848,14 @@
       </svg>
     </div>
     <h2 id="auth-title">歡迎使用 NTPU AI</h2>
-    <p class="auth-subtitle" id="auth-sub">請使用 NTPU Google 帳號登入</p>
-    <button class="google-btn" id="googleSignInBtn">
-      <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908C16.658 14.013 17.64 11.705 17.64 9.2z"/>
-        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.859-3.048.859-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
-        <path fill="#FBBC05" d="M3.964 10.705A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.705V4.963H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.037l3.007-2.332z"/>
-        <path fill="#EA4335" d="M9 3.584c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.963L3.964 7.295C4.672 5.168 6.656 3.584 9 3.584z"/>
-      </svg>
-      <span id="google-btn-text">使用 Google 帳號登入</span>
-    </button>
-    <p class="google-btn-sub" id="auth-domain-hint">僅限 @gm.ntpu.edu.tw 帳號</p>
+    <p class="auth-subtitle" id="auth-sub">請使用 NTPU 學校信箱登入</p>
+
+    <div id="auth-login-step">
+      <input type="email" class="auth-input" id="login-email-input" placeholder="you@gm.ntpu.edu.tw" autocomplete="email" />
+      <button class="auth-btn primary" id="loginBtn">寄送登入連結</button>
+      <p class="google-btn-sub" id="auth-domain-hint">新帳號僅限 @gm.ntpu.edu.tw / @ms.ntpu.edu.tw；既有帳號可繼續登入</p>
+    </div>
+
     <div class="auth-err" id="auth-err"></div>
   </div>
 </div>
@@ -930,7 +940,7 @@
             <option value="cloud-medium-nemotron">Nemotron Super 49B（中模型）</option>
             <option value="cloud-medium-grok-build">Grok Build 0.1（中模型）</option>
             <option value="cloud-medium-grok43">Grok 4.3（中模型）</option>
-            <option value="cloud-medium-gpt-oss120">gpt-oss-120b 免費（中模型）</option>
+            <option value="cloud-medium-gpt-oss120">gpt-oss-120b（中模型）</option>
             <option value="cloud-medium-gemma-free">Gemma 4 31B 免費（中模型）</option>
             <option value="cloud-medium-nemotron-nano30">Nemotron 3 Nano 30B 免費（中模型）</option>
             <option value="cloud-medium-nemotron-omni">Nemotron 3 Nano Omni 免費（中模型）</option>
@@ -1167,21 +1177,62 @@
   });
   const auth = firebase.auth();
 
-  // ── Auth UI ──
-  const googleProvider = new firebase.auth.GoogleAuthProvider();
-  googleProvider.setCustomParameters({ prompt: "select_account" });
+  // ── Auth UI（Email Link / passwordless）──
+  // 相同 email 會登入 Firebase 內既有的帳號，不會另建一個使用者。
+  // 新帳號的網域限制由後端 /me 判定。前端不能安全地判斷某 Email 是否已存在，
+  // 因此不在寄信前擋網域，才能讓 Firebase 中既有的非學校帳號繼續登入。
+  const EMAIL_FOR_SIGN_IN_KEY = "ntpu_ai_email_for_sign_in";
 
-  document.getElementById("googleSignInBtn").onclick = async () => {
-    const errEl = document.getElementById("auth-err");
-    errEl.textContent = "";
+  function translateAuthErr(e) {
+    return (t("authErr") && t("authErr")[e.code]) || e.message;
+  }
+
+  function setAuthMsg(text, isInfo) {
+    authErrEl.textContent = text;
+    authErrEl.classList.toggle("info", !!isInfo);
+  }
+
+  const loginEmailInput = document.getElementById("login-email-input");
+  const authErrEl = document.getElementById("auth-err");
+
+  document.getElementById("loginBtn").onclick = async () => {
+    const email = loginEmailInput.value.trim().toLowerCase();
+    setAuthMsg("");
+    if (!email || !email.includes("@")) {
+      setAuthMsg(t("authInvalidEmail"));
+      return;
+    }
     try {
-      await auth.signInWithPopup(googleProvider);
-      // domain check happens in onAuthStateChanged via /me call
+      const continueUrl = `${location.origin}${location.pathname}`;
+      await auth.sendSignInLinkToEmail(email, {
+        url: continueUrl,
+        handleCodeInApp: true,
+      });
+      localStorage.setItem(EMAIL_FOR_SIGN_IN_KEY, email);
+      setAuthMsg(t("authLinkSent").replace("{email}", email), true);
     } catch (e) {
-      if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") return;
-      errEl.textContent = e.message;
+      setAuthMsg(translateAuthErr(e));
     }
   };
+
+  async function completeEmailLinkSignIn() {
+    if (!auth.isSignInWithEmailLink(location.href)) return;
+    let email = localStorage.getItem(EMAIL_FOR_SIGN_IN_KEY) || "";
+    if (!email) email = (prompt(t("authEmailAgain")) || "").trim().toLowerCase();
+    if (!email || !email.includes("@")) {
+      setAuthMsg(t("authInvalidEmail"));
+      return;
+    }
+    try {
+      await auth.signInWithEmailLink(email, location.href);
+      localStorage.removeItem(EMAIL_FOR_SIGN_IN_KEY);
+      history.replaceState({}, document.title, `${location.origin}${location.pathname}`);
+    } catch (e) {
+      setAuthMsg(translateAuthErr(e));
+    }
+  }
+  // 等整份腳本（包含 i18n 字典）載入完成後再處理信箱中的回跳連結。
+  setTimeout(completeEmailLinkSignIn, 0);
 
   document.getElementById("logoutBtn").onclick = () => {
     if (confirm(t("logoutConfirm"))) auth.signOut();
@@ -1207,7 +1258,7 @@
   auth.onAuthStateChanged(async user => {
     currentUser = user;
     if (user) {
-      // For Google sign-ins: verify domain via backend before granting access
+      // 再向後端驗證一次網域（防止繞過前端檢查直接呼叫 Firebase SDK）
       const errEl = document.getElementById("auth-err");
       try {
         const token = await user.getIdToken();
@@ -1222,8 +1273,8 @@
       } catch (_) {}
 
       document.getElementById("auth-overlay").classList.add("hidden");
-      document.getElementById("user-email").textContent = user.email;
-      document.getElementById("userAvatar").textContent = (user.email || "?").charAt(0);
+      document.getElementById("user-email").textContent = user.displayName || user.email;
+      document.getElementById("userAvatar").textContent = (user.displayName || user.email || "?").charAt(0);
       const key = `ai_session_${user.uid}`;
       const savedSid = localStorage.getItem(key);
       sessionId = savedSid || newSession(user.uid);
@@ -1253,6 +1304,7 @@
       refreshMemoryRing();
     } else {
       document.getElementById("auth-overlay").classList.remove("hidden");
+      loginEmailInput.value = "";
       document.getElementById("user-email").textContent = "";
       document.getElementById("adminBtn").style.display = "none";
       sessionId = null; isAdmin = false;
@@ -1532,7 +1584,7 @@
     "cloud-medium-nemotron": { cls: "medium", short: "Nemotron 49B",    full: "Llama 3.3 Nemotron Super 49B (NVIDIA)" },
     "cloud-medium-grok-build": { cls: "medium", short: "Grok Build",    full: "Grok Build 0.1 (OpenRouter)" },
     "cloud-medium-grok43": { cls: "medium", short: "Grok 4.3",         full: "Grok 4.3 (OpenRouter)" },
-    "cloud-medium-gpt-oss120": { cls: "medium", short: "gpt-oss-120b",  full: "gpt-oss-120b (OpenRouter, free)" },
+    "cloud-medium-gpt-oss120": { cls: "medium", short: "gpt-oss-120b",  full: "gpt-oss-120b (OpenRouter)" },
     "cloud-medium-gemma-free": { cls: "medium", short: "Gemma 4 31B (free)", full: "Gemma 4 31B (OpenRouter, free)" },
     "cloud-medium-nemotron-nano30": { cls: "medium", short: "Nemotron 3 Nano 30B", full: "Nemotron 3 Nano 30B (OpenRouter, free)" },
     "cloud-medium-nemotron-omni": { cls: "medium", short: "Nemotron 3 Omni", full: "Nemotron 3 Nano Omni Reasoning (OpenRouter, free)" },
@@ -1563,10 +1615,14 @@
       // 靜態 HTML 可能保留尚未在目前部署註冊的模型。將這些選項停用，
       // 避免管理員誤以為已經能用；後端也會再次驗證，防止繞過 UI。
       const available = new Set(Object.values(data.candidates || {}).flat());
+      const disabled = new Set(data.disabled || []);
       document.querySelectorAll("#cfg-force-model option").forEach(option => {
         const value = option.value;
         if (!value || ["small", "medium", "large", "tiny"].includes(value)) return;
-        if (!available.has(value)) {
+        if (disabled.has(value)) {
+          option.disabled = true;
+          option.textContent += "（暫停使用）";
+        } else if (!available.has(value)) {
           option.disabled = true;
           option.textContent += "（尚未設定）";
         }
@@ -2017,9 +2073,13 @@
       placeholder:      "輸入訊息… (Enter 送出，Shift+Enter 換行)",
       hint:             "AI 可能出錯，重要內容請自行驗證",
       authTitle_login:  "歡迎使用 NTPU AI",
-      authSub_login:    "請使用 NTPU Google 帳號登入",
-      googleSignIn:     "使用 Google 帳號登入",
-      authDomainHint:   "僅限 @gm.ntpu.edu.tw / @ms.ntpu.edu.tw 帳號",
+      authSub_login:    "輸入學校信箱，我們會寄送無密碼登入連結",
+      authLoginBtn:     "寄送登入連結",
+      authEmailPlaceholder: "you@gm.ntpu.edu.tw",
+      authDomainHint:   "新帳號僅限 @gm.ntpu.edu.tw / @ms.ntpu.edu.tw；既有帳號可繼續登入",
+      authInvalidEmail: "請輸入有效的電子信箱",
+      authLinkSent:     "登入連結已寄至 {email}，請至信箱點擊完成登入。",
+      authEmailAgain:   "請重新輸入接收登入連結的學校信箱：",
       adminToggle:      "管理員入口",
       authAdminDivider: "管理員登入",
       authEmail:        "電子郵件",
@@ -2179,9 +2239,13 @@
       placeholder:      "Type a message… (Enter to send, Shift+Enter for newline)",
       hint:             "AI may make mistakes. Please verify important information.",
       authTitle_login:  "Welcome to NTPU AI",
-      authSub_login:    "Sign in with your NTPU Google account",
-      googleSignIn:     "Sign in with Google",
-      authDomainHint:   "@gm.ntpu.edu.tw / @ms.ntpu.edu.tw accounts only",
+      authSub_login:    "Enter your school email and we will send a passwordless sign-in link",
+      authLoginBtn:     "Send sign-in link",
+      authEmailPlaceholder: "you@gm.ntpu.edu.tw",
+      authDomainHint:   "New accounts require @gm.ntpu.edu.tw / @ms.ntpu.edu.tw; existing accounts may still sign in",
+      authInvalidEmail: "Enter a valid email address",
+      authLinkSent:     "A sign-in link was sent to {email}. Open your email to finish signing in.",
+      authEmailAgain:   "Re-enter the school email that received this sign-in link:",
       adminToggle:      "Admin login",
       authAdminDivider: "Admin login",
       authEmail:        "Email",
@@ -2351,7 +2415,8 @@
     // Auth
     document.getElementById("auth-title").textContent    = L.authTitle_login;
     document.getElementById("auth-sub").textContent      = L.authSub_login;
-    document.getElementById("google-btn-text").textContent = L.googleSignIn;
+    document.getElementById("loginBtn").textContent  = L.authLoginBtn;
+    document.getElementById("login-email-input").placeholder = L.authEmailPlaceholder;
     document.getElementById("auth-domain-hint").textContent = L.authDomainHint;
     // Admin panel
     document.getElementById("userMenuAdminLabel").textContent = L.adminBtn;

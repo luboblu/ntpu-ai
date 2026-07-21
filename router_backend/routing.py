@@ -9,6 +9,7 @@ import httpx
 
 import store
 from config import (
+    AUTO_EXCLUDED_MODELS,
     HISTORY_LIMIT,
     JUDGE_MODEL_ALIAS,
     MODEL_CANDIDATES,
@@ -80,8 +81,24 @@ def _route_from_score(config: dict, score: float) -> str:
     return "small"
 
 
+def automatic_candidates(route: str) -> list[str]:
+    """供聊天使用的候選；完整清單仍保留給管理介面顯示。"""
+    candidates = [
+        alias for alias in MODEL_CANDIDATES.get(route, [])
+        if alias not in AUTO_EXCLUDED_MODELS
+    ]
+    if candidates:
+        return candidates
+    return [
+        alias for alias in MODEL_CANDIDATES.get("small", [])
+        if alias not in AUTO_EXCLUDED_MODELS
+    ]
+
+
 def default_model_for_route(route: str) -> str:
-    candidates = MODEL_CANDIDATES.get(route) or MODEL_CANDIDATES["small"]
+    candidates = automatic_candidates(route)
+    if not candidates:
+        raise ValueError("目前沒有可用的自動路由模型")
     return candidates[0]
 
 
@@ -90,7 +107,7 @@ def pick_tool_capable(route: str, model_alias: str) -> tuple[str, str]:
     若整個級距都不支援，退到 medium 的預設模型。"""
     if model_alias not in NO_TOOL_MODELS:
         return route, model_alias
-    for alias in MODEL_CANDIDATES.get(route, []):
+    for alias in automatic_candidates(route):
         if alias not in NO_TOOL_MODELS:
             return route, alias
     return "medium", default_model_for_route("medium")
@@ -99,14 +116,14 @@ def pick_tool_capable(route: str, model_alias: str) -> tuple[str, str]:
 def _model_options_text() -> str:
     lines = []
     for route in ("small", "medium", "large"):
-        candidates = MODEL_CANDIDATES.get(route, [])
+        candidates = automatic_candidates(route)
         if candidates:
             lines.append(f"{route}:")
             for alias in candidates:
                 lines.append(f"- {alias}: {MODEL_NOTES.get(alias, '可用回答模型')}")
     if MODEL_CANDIDATES.get("tiny"):
         lines.append("tiny:")
-        for alias in MODEL_CANDIDATES["tiny"]:
+        for alias in automatic_candidates("tiny"):
             lines.append(f"- {alias}: 開源或自訂小模型；僅在低風險、低複雜度且不需工具時使用")
     return "\n".join(lines)
 
@@ -117,6 +134,8 @@ def select_route(config: dict, judge: dict, force: Optional[str]) -> tuple[str, 
     requested_route = judge.get("route")
     requested_model = judge.get("model")
 
+    if force in AUTO_EXCLUDED_MODELS:
+        raise ValueError(f"模型 {force} 目前暫停使用")
     if force in MODEL_TO_ROUTE:
         return MODEL_TO_ROUTE[force], force
 
@@ -134,7 +153,9 @@ def select_route(config: dict, judge: dict, force: Optional[str]) -> tuple[str, 
     else:
         route = _route_from_score(config, score)
 
-    candidates = MODEL_CANDIDATES.get(route) or MODEL_CANDIDATES["small"]
+    candidates = automatic_candidates(route)
+    if not candidates:
+        raise ValueError(f"{route} 級距目前沒有可用模型")
 
     # 地端優先：該級距有 local-* 候選時，改在地端候選中挑（資料不出機房）。
     # 之後接 Ollama / vLLM 時，把 alias 加進 LOCAL_*_MODEL_ALIASES 並在管理面板開啟 prefer_local 即可。
@@ -172,7 +193,7 @@ async def model_classify(client: httpx.AsyncClient, text: str, history: list) ->
         model = parsed.get("model")
         if route not in MODEL_CANDIDATES:
             route = None
-        if route and model not in MODEL_CANDIDATES.get(route, []):
+        if route and model not in automatic_candidates(route):
             model = None
         return {
             "score": score,

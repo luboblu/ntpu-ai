@@ -16,6 +16,7 @@ from config import (
     LITELLM_BASE_URL,
     LOCAL_LLM_API_KEY,
     LOCAL_LLM_BASE_URL,
+    LOCAL_MODEL_NAME_MAP,
     MAX_ANSWER_TOKENS,
     is_local_alias,
 )
@@ -42,10 +43,19 @@ def _endpoint_for(model_alias: str) -> tuple[str, dict]:
     return _CLOUD_URL, _CLOUD_HEADERS
 
 
+def _provider_payload(payload: dict) -> dict:
+    """將 Router 的地端 alias 換成地端服務實際註冊的 model id。"""
+    model_alias = payload.get("model", "")
+    provider_model = LOCAL_MODEL_NAME_MAP.get(model_alias)
+    if not provider_model:
+        return payload
+    return {**payload, "model": provider_model}
+
+
 async def _chat_completion(client: httpx.AsyncClient, payload: dict) -> dict:
     """非串流 chat completion，回傳解析後的 JSON。"""
     url, headers = _endpoint_for(payload.get("model", ""))
-    resp = await client.post(url, headers=headers, json=payload, timeout=120)
+    resp = await client.post(url, headers=headers, json=_provider_payload(payload), timeout=120)
     resp.raise_for_status()
     return resp.json()
 
@@ -89,8 +99,10 @@ def stream_litellm(client: httpx.AsyncClient, model_alias: str, messages: list,
         "POST",
         url,
         headers=headers,
-        json={"model": model_alias, "messages": messages, "max_tokens": max_tokens,
-              "stream": True, "stream_options": {"include_usage": True}},
+        json=_provider_payload({
+            "model": model_alias, "messages": messages, "max_tokens": max_tokens,
+            "stream": True, "stream_options": {"include_usage": True},
+        }),
         timeout=STREAM_TIMEOUT,
     )
 

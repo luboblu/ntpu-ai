@@ -30,6 +30,7 @@ import store
 from attachments import OFFICE_MIMES, extract_office_text, is_text_mime
 from chat import stream_chat
 from config import (
+    AUTO_EXCLUDED_MODELS,
     CHAT_RATE_LIMIT_PER_MINUTE,
     CORS_ORIGINS,
     MEMORY_COMPRESS_INTERVAL_HOURS,
@@ -92,7 +93,11 @@ async def health():
 async def list_models():
     """模型清單的唯一來源：前端據此顯示各級距候選模型與說明，
     之後接上地端模型（local-*）時前端不需要改。"""
-    return {"candidates": MODEL_CANDIDATES, "notes": MODEL_NOTES}
+    return {
+        "candidates": MODEL_CANDIDATES,
+        "notes": MODEL_NOTES,
+        "disabled": sorted(AUTO_EXCLUDED_MODELS),
+    }
 
 
 # ------------------------------------------------------------------
@@ -377,6 +382,8 @@ async def admin_set_config(config: RoutingConfig, authorization: Optional[str] =
     force = config.force_model
     tiers = {"small", "medium", "large", "tiny"}
     registered_models = {alias for aliases in MODEL_CANDIDATES.values() for alias in aliases}
+    if force in AUTO_EXCLUDED_MODELS:
+        raise HTTPException(status_code=400, detail=f"模型 {force} 目前暫停使用")
     if force and force not in tiers and force not in registered_models:
         raise HTTPException(
             status_code=400,

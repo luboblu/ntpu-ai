@@ -126,7 +126,8 @@ model_list:
 
   - model_name: cloud-medium-gpt-oss120
     litellm_params:
-      model: openrouter/openai/gpt-oss-120b:free
+      # OpenRouter 已下架免費 slug，改用仍可用的付費版本。
+      model: openrouter/openai/gpt-oss-120b
       api_key: os.environ/OPENROUTER_API_KEY
 
   - model_name: cloud-medium-gemma-free
